@@ -3,9 +3,6 @@
 All notable changes to RadioFilm Scanner. Newest first.
 Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown in brackets.
 
-## [Unreleased]
-<!-- Add changes here as you make them; move them under a new version when you release. -->
-
 ## [1.5] (6) - 2026-09-25
 ### Fixed
 - Stretched or sideways viewfinder on tablets whose natural orientation is landscape (e.g. Xiaomi Pad 6).
