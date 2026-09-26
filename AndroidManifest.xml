@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.filmscan.app"
+    android:versionCode="6"
+    android:versionName="1.5">
+
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <application
+        android:name=".App"
+        android:label="RadioFilm Scanner"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
+        android:largeHeap="true"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true">
+
+        <!-- The app rotates its own camera preview; opt out of the system's compatibility rotation
+             for portrait-only apps on tablets and foldables (Android 13+ / 14+). -->
+        <property android:name="android.window.PROPERTY_CAMERA_COMPAT_ALLOW_FORCE_ROTATION" android:value="false" />
+        <property android:name="android.window.PROPERTY_CAMERA_COMPAT_ALLOW_REFRESH" android:value="false" />
+        <property android:name="android.camera.PROPERTY_COMPAT_OVERRIDE_LANDSCAPE_TO_PORTRAIT" android:value="false" />
+
+        <activity
+            android:name=".CameraActivity"
+            android:exported="true"
+            android:configChanges="keyboardHidden|screenSize|smallestScreenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter android:label="Scan with RadioFilm Scanner">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter android:label="Scan with RadioFilm Scanner">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".SavedActivity" android:exported="false" />
+        <activity android:name=".SavedViewActivity" android:exported="false" />
+        <activity android:name=".RearrangeActivity" android:exported="false" />
+        <activity android:name=".SuggestionsActivity" android:exported="false" />
+        <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".EditActivity" android:exported="false" />
+
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="com.filmscan.app.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

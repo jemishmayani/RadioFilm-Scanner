@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FF0D1B2A</color>
+    <color name="panel">#FF152A3E</color>
+    <color name="accent">#FFF5B544</color>
+    <color name="light">#FFE6F0F7</color>
+    <color name="muted">#FF8FA7BA</color>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/bg</item>
+        <item name="android:colorPrimaryDark">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:textColorPrimary">@color/light</item>
+        <item name="android:textColorSecondary">@color/muted</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme</item>
+        <item name="android:windowAnimationStyle">@style/ActivityAnim</item>
+    </style>
+
+    <style name="ActivityAnim" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/act_open_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/act_open_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/act_close_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/act_close_exit</item>
+        <item name="android:taskOpenEnterAnimation">@anim/act_open_enter</item>
+        <item name="android:taskOpenExitAnimation">@anim/act_open_exit</item>
+        <item name="android:taskCloseEnterAnimation">@anim/act_close_enter</item>
+        <item name="android:taskCloseExitAnimation">@anim/act_close_exit</item>
+    </style>
+
+    <style name="SheetAnim">
+        <item name="android:windowEnterAnimation">@anim/sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/sheet_out</item>
+    </style>
+
+    <style name="SheetTheme" parent="@android:style/Theme.Material.Dialog.NoActionBar">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="android:windowAnimationStyle">@style/SheetAnim</item>
+        <item name="android:textColorPrimary">@color/light</item>
+        <item name="android:textColorHint">@color/muted</item>
+    </style>
+
+    <style name="DialogTheme" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorBackground">@color/panel</item>
+        <item name="android:textColorPrimary">@color/light</item>
+        <item name="android:textColorSecondary">@color/muted</item>
+    </style>
+
+    <style name="AppTheme.A0">
+        <item name="android:colorAccent">#FFF5B544</item>
+        <item name="android:colorControlActivated">#FFF5B544</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A0</item>
+    </style>
+    <style name="DialogTheme.A0">
+        <item name="android:colorAccent">#FFF5B544</item>
+        <item name="android:colorControlActivated">#FFF5B544</item>
+    </style>
+    <style name="SheetTheme.A0">
+        <item name="android:colorAccent">#FFF5B544</item>
+        <item name="android:colorControlActivated">#FFF5B544</item>
+    </style>
+
+    <style name="AppTheme.A1">
+        <item name="android:colorAccent">#FFFF8A65</item>
+        <item name="android:colorControlActivated">#FFFF8A65</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A1</item>
+    </style>
+    <style name="DialogTheme.A1">
+        <item name="android:colorAccent">#FFFF8A65</item>
+        <item name="android:colorControlActivated">#FFFF8A65</item>
+    </style>
+    <style name="SheetTheme.A1">
+        <item name="android:colorAccent">#FFFF8A65</item>
+        <item name="android:colorControlActivated">#FFFF8A65</item>
+    </style>
+
+    <style name="AppTheme.A2">
+        <item name="android:colorAccent">#FFF48FB1</item>
+        <item name="android:colorControlActivated">#FFF48FB1</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A2</item>
+    </style>
+    <style name="DialogTheme.A2">
+        <item name="android:colorAccent">#FFF48FB1</item>
+        <item name="android:colorControlActivated">#FFF48FB1</item>
+    </style>
+    <style name="SheetTheme.A2">
+        <item name="android:colorAccent">#FFF48FB1</item>
+        <item name="android:colorControlActivated">#FFF48FB1</item>
+    </style>
+
+    <style name="AppTheme.A3">
+        <item name="android:colorAccent">#FFB39DFF</item>
+        <item name="android:colorControlActivated">#FFB39DFF</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A3</item>
+    </style>
+    <style name="DialogTheme.A3">
+        <item name="android:colorAccent">#FFB39DFF</item>
+        <item name="android:colorControlActivated">#FFB39DFF</item>
+    </style>
+    <style name="SheetTheme.A3">
+        <item name="android:colorAccent">#FFB39DFF</item>
+        <item name="android:colorControlActivated">#FFB39DFF</item>
+    </style>
+
+    <style name="AppTheme.A4">
+        <item name="android:colorAccent">#FF64B5F6</item>
+        <item name="android:colorControlActivated">#FF64B5F6</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A4</item>
+    </style>
+    <style name="DialogTheme.A4">
+        <item name="android:colorAccent">#FF64B5F6</item>
+        <item name="android:colorControlActivated">#FF64B5F6</item>
+    </style>
+    <style name="SheetTheme.A4">
+        <item name="android:colorAccent">#FF64B5F6</item>
+        <item name="android:colorControlActivated">#FF64B5F6</item>
+    </style>
+
+    <style name="AppTheme.A5">
+        <item name="android:colorAccent">#FF4DD0C4</item>
+        <item name="android:colorControlActivated">#FF4DD0C4</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A5</item>
+    </style>
+    <style name="DialogTheme.A5">
+        <item name="android:colorAccent">#FF4DD0C4</item>
+        <item name="android:colorControlActivated">#FF4DD0C4</item>
+    </style>
+    <style name="SheetTheme.A5">
+        <item name="android:colorAccent">#FF4DD0C4</item>
+        <item name="android:colorControlActivated">#FF4DD0C4</item>
+    </style>
+
+    <style name="AppTheme.A6">
+        <item name="android:colorAccent">#FF7BD88F</item>
+        <item name="android:colorControlActivated">#FF7BD88F</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A6</item>
+    </style>
+    <style name="DialogTheme.A6">
+        <item name="android:colorAccent">#FF7BD88F</item>
+        <item name="android:colorControlActivated">#FF7BD88F</item>
+    </style>
+    <style name="SheetTheme.A6">
+        <item name="android:colorAccent">#FF7BD88F</item>
+        <item name="android:colorControlActivated">#FF7BD88F</item>
+    </style>
+
+    <style name="AppTheme.A7">
+        <item name="android:colorAccent">#FFD4E157</item>
+        <item name="android:colorControlActivated">#FFD4E157</item>
+        <item name="android:alertDialogTheme">@style/DialogTheme.A7</item>
+    </style>
+    <style name="DialogTheme.A7">
+        <item name="android:colorAccent">#FFD4E157</item>
+        <item name="android:colorControlActivated">#FFD4E157</item>
+    </style>
+    <style name="SheetTheme.A7">
+        <item name="android:colorAccent">#FFD4E157</item>
+        <item name="android:colorControlActivated">#FFD4E157</item>
+    </style>
+</resources>

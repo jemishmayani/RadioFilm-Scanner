@@ -1,0 +1,21 @@
+# build output
+build/
+dist/
+bin/
+obj/
+gen/
+*.apk
+*.dex
+*.class
+
+# signing: never commit your key or its passwords
+*.jks
+*.keystore
+signing.env
+
+# editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
