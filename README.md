@@ -6,14 +6,12 @@ Photograph a film on a lightbox (or a report, a prescription, a whiteboard), and
 
 ![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![APK size](https://img.shields.io/badge/APK-~280%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.5-orange)
 
-<!-- Screenshots: add images to docs/screenshots/ and uncomment, e.g.
-<p>
-  <img src="docs/screenshots/camera.png" width="24%">
-  <img src="docs/screenshots/crop.png" width="24%">
-  <img src="docs/screenshots/filters.png" width="24%">
-  <img src="docs/screenshots/save.png" width="24%">
+<p align="center">
+  <img src="docs/camera.jpg" width="24%" alt="Camera with live edge detection">
+  <img src="docs/crop.jpg" width="24%" alt="Crop with edge snapping">
+  <img src="docs/filters.jpg" width="24%" alt="Filters">
+  <img src="docs/save.jpg" width="24%" alt="Save sheet with name suggestions">
 </p>
--->
 
 ## Why this exists
 
