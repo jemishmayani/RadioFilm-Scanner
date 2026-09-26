@@ -210,9 +210,9 @@ public final class Imaging {
             ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
             ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
             am.getMemoryInfo(mi);
-            limit = Math.min(48_000_000L, (long) (mi.availMem * 0.35 / 8));
+            limit = Math.min(48_000_000L, (long) (mi.availMem * 0.35 / 5.5));
         } else {
-            limit = (long) (Runtime.getRuntime().maxMemory() * 0.45 / 8);
+            limit = (long) (Runtime.getRuntime().maxMemory() * 0.45 / 5.5);
         }
         limit = Math.max(4_000_000L, limit);
         if (userLimitMp > 0) limit = Math.min(limit, userLimitMp * 1_000_000L);
@@ -240,6 +240,10 @@ public final class Imaging {
         int sample = 1;
         double region = (double) rect.width() * rect.height();
         while (region / ((double) sample * sample) > maxPixels * 1.6 || sample * 2 <= 1.0 / f) sample *= 2;
+        // Preferred: build the result in strips, decoding only the part of the photo each strip
+        // needs. Peak memory is about the output plus one strip, instead of output plus source.
+        Bitmap tiled = renderInStrips(p, qr, outW, outH, sample);
+        if (tiled != null) return tiled;
         Bitmap src = decodeRegion(p.file, rect, sample);
         if (src == null) {
             // decoder without region support (some HEIF/PNG): decode everything
@@ -256,6 +260,89 @@ public final class Imaging {
         Bitmap out = warp(src, sp, outW, outH, p.rot);
         src.recycle();
         return out;
+    }
+
+    /** Output rows per strip are chosen so each strip covers about this many output pixels. */
+    private static final long STRIP_PIXELS = 6_000_000L;
+
+    /**
+     * Perspective correction in horizontal strips of the output. For each strip, only the part of the
+     * original photo that lands in it is decoded (at the same sampling as a single decode would use),
+     * drawn through the same transform, then released. Returns null to fall back to the one-piece
+     * method (e.g. formats without region decoding); OutOfMemoryError is passed on to the caller.
+     */
+    private static Bitmap renderInStrips(Page p, float[] qr, int outW, int outH, int sample) {
+        BitmapRegionDecoder d;
+        try {
+            d = BitmapRegionDecoder.newInstance(p.file, false);
+        } catch (Throwable t) {
+            return null;
+        }
+        if (d == null) return null;
+        Bitmap out = null;
+        try {
+            int W = d.getWidth(), H = d.getHeight();
+            if (W != p.rawW || H != p.rawH) return null;
+            int rot = p.rot;
+            int fw = Math.max(1, (rot & 1) == 0 ? outW : outH), fh = Math.max(1, (rot & 1) == 0 ? outH : outW);
+            float[] c = {0, 0, fw, 0, fw, fh, 0, fh};
+            float[] dst = new float[8];
+            for (int i = 0; i < 4; i++) {
+                int j = (i + rot) & 3;
+                dst[2 * i] = c[2 * j]; dst[2 * i + 1] = c[2 * j + 1];
+            }
+            Matrix full = new Matrix(), inv = new Matrix();
+            if (!full.setPolyToPoly(qr, 0, dst, 0, 4) || !full.invert(inv)) return null;
+            out = Bitmap.createBitmap(fw, fh, Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(out);
+            cv.drawColor(Color.BLACK);
+            Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inSampleSize = sample;
+            o.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            int strip = (int) Math.max(64, Math.min(fh, STRIP_PIXELS / fw));
+            int pad = 3 * sample + 2;
+            for (int y0 = 0; y0 < fh; y0 += strip) {
+                int y1 = Math.min(fh, y0 + strip);
+                float[] pts = {0, y0, fw, y0, fw, y1, 0, y1};
+                inv.mapPoints(pts);
+                float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+                for (int i = 0; i < 4; i++) {
+                    minX = Math.min(minX, pts[2 * i]); maxX = Math.max(maxX, pts[2 * i]);
+                    minY = Math.min(minY, pts[2 * i + 1]); maxY = Math.max(maxY, pts[2 * i + 1]);
+                }
+                if (Float.isNaN(minX) || Float.isInfinite(minX) || Float.isInfinite(maxX)
+                        || Float.isInfinite(minY) || Float.isInfinite(maxY)) { out.recycle(); return null; }
+                // align to the sampling grid so every strip samples the photo identically
+                int left = Math.max(0, ((int) Math.floor(minX) - pad) / sample * sample);
+                int top = Math.max(0, ((int) Math.floor(minY) - pad) / sample * sample);
+                int right = Math.min(W, ((int) Math.ceil(maxX) + pad + sample - 1) / sample * sample);
+                int bottom = Math.min(H, ((int) Math.ceil(maxY) + pad + sample - 1) / sample * sample);
+                if (right - left < 1 || bottom - top < 1) continue;
+                Rect r = new Rect(left, top, right, bottom);
+                Bitmap part = d.decodeRegion(r, o);
+                if (part == null) { out.recycle(); return null; }
+                Matrix m = new Matrix();
+                m.setScale(sample, sample);   // each decoded pixel covers exactly sample x sample photo pixels
+                m.postTranslate(r.left, r.top);
+                m.postConcat(full);
+                cv.save();
+                cv.clipRect(0, y0, fw, y1);
+                cv.drawBitmap(part, m, paint);
+                cv.restore();
+                part.recycle();
+            }
+            return out;
+        } catch (OutOfMemoryError e) {
+            if (out != null) out.recycle();
+            throw e;
+        } catch (Throwable t) {
+            Log.w("FilmScan", "strip render failed, using single decode", t);
+            if (out != null) out.recycle();
+            return null;
+        } finally {
+            d.recycle();
+        }
     }
 
     private static Bitmap decodeRegion(String path, Rect rect, int sample) {
@@ -295,13 +382,76 @@ public final class Imaging {
         Filters.apply(new BitmapSource(b), p.filter, p.bright, p.contrast, p.sharp);
     }
 
+    /**
+     * Anonymises regions: black box, blur or pixelate. Large regions are processed on a reduced
+     * copy, so this never needs much memory, even on a full-resolution export.
+     */
     public static void drawRedactions(Bitmap b, Page p) {
         if (p.redact.isEmpty()) return;
         Canvas c = new Canvas(b);
-        Paint paint = new Paint();
-        paint.setColor(Color.BLACK);
-        int w = b.getWidth(), h = b.getHeight();
-        for (float[] r : p.redact) c.drawRect(r[0] * w, r[1] * h, r[2] * w, r[3] * h, paint);
+        Paint black = new Paint();
+        black.setColor(Color.BLACK);
+        Paint cell = new Paint();
+        Paint smooth = new Paint(Paint.FILTER_BITMAP_FLAG);
+        int W = b.getWidth(), H = b.getHeight();
+        for (float[] r : p.redact) {
+            int left = clampI(Math.round(Math.min(r[0], r[2]) * W), 0, W), right = clampI(Math.round(Math.max(r[0], r[2]) * W), 0, W);
+            int top = clampI(Math.round(Math.min(r[1], r[3]) * H), 0, H), bottom = clampI(Math.round(Math.max(r[1], r[3]) * H), 0, H);
+            int rw = right - left, rh = bottom - top;
+            if (rw < 1 || rh < 1) continue;
+            int type = com.filmscan.core.Redact.type(r);
+            try {
+                if (type == com.filmscan.core.Redact.BOX) {
+                    c.drawRect(left, top, right, bottom, black);
+                } else if (type == com.filmscan.core.Redact.PIXELATE) {
+                    int bs = com.filmscan.core.Redact.blockSize(W, H);
+                    int cols = Math.max(1, (rw + bs - 1) / bs), rows = Math.max(1, (rh + bs - 1) / bs);
+                    Bitmap region = reduced(b, left, top, rw, rh, 1_000_000);
+                    int sw = region.getWidth(), sh = region.getHeight();
+                    int[] px = new int[sw * sh];
+                    region.getPixels(px, 0, sw, 0, 0, sw, sh);
+                    region.recycle();
+                    int[] avg = com.filmscan.core.Redact.blockAverages(px, sw, sh, cols, rows);
+                    for (int by = 0; by < rows; by++) {
+                        for (int bx = 0; bx < cols; bx++) {
+                            cell.setColor(avg[by * cols + bx]);
+                            c.drawRect(left + bx * rw / (float) cols, top + by * rh / (float) rows,
+                                    left + (bx + 1) * rw / (float) cols, top + (by + 1) * rh / (float) rows, cell);
+                        }
+                    }
+                } else {
+                    int radius = com.filmscan.core.Redact.blurRadius(W, H);
+                    // blur a small copy (radius about 4 px there), then stretch it back smoothly
+                    float k = Math.max(1f, radius / 4f);
+                    k = Math.max(k, (float) Math.sqrt(rw * (double) rh / 1_000_000.0));
+                    int sw = Math.max(1, Math.round(rw / k)), sh = Math.max(1, Math.round(rh / k));
+                    Bitmap region = Bitmap.createBitmap(b, left, top, rw, rh);
+                    Bitmap small = Bitmap.createScaledBitmap(region, sw, sh, true);
+                    if (small != region) region.recycle();
+                    int[] px = new int[sw * sh];
+                    small.getPixels(px, 0, sw, 0, 0, sw, sh);
+                    com.filmscan.core.Redact.blur(px, sw, sh, Math.max(1, Math.round(radius / k)));
+                    Bitmap out = Bitmap.createBitmap(px, sw, sh, Bitmap.Config.ARGB_8888);
+                    small.recycle();
+                    c.drawBitmap(out, null, new Rect(left, top, right, bottom), smooth);
+                    out.recycle();
+                }
+            } catch (OutOfMemoryError e) {
+                c.drawRect(left, top, right, bottom, black); // never leave the area readable
+            }
+        }
+    }
+
+    private static int clampI(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    /** A copy of a region, shrunk to at most maxPixels. */
+    private static Bitmap reduced(Bitmap b, int x, int y, int w, int h, int maxPixels) {
+        Bitmap region = Bitmap.createBitmap(b, x, y, w, h);
+        double f = Math.sqrt(maxPixels / (double) (w * (long) h));
+        if (f >= 1) return region;
+        Bitmap small = Bitmap.createScaledBitmap(region, Math.max(1, (int) (w * f)), Math.max(1, (int) (h * f)), true);
+        if (small != region) region.recycle();
+        return small;
     }
 
     /** Finished preview-sized render: warp + filter + redactions. */

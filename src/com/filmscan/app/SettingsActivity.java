@@ -55,6 +55,8 @@ public final class SettingsActivity extends BaseActivity {
 
         // ---------------------------------------------------------------- saving
         section("Saving");
+        info(R.drawable.ic_saved, "Where files go", "Images: Pictures/" + Exporter.folder() + "\nPDFs: Download/" + Exporter.folder()
+                + "\nFind them in your Gallery or Files app. Saved scans in this app keep a copy for editing.");
         final int[] saveVals = {-1, Exporter.PDF, Exporter.JPEG, Exporter.PNG};
         final String[] saveLabels = {"Ask every time", "PDF document", "JPEG images", "PNG images (lossless)"};
         choice(R.drawable.ic_save, "Save as", saveLabels, saveVals, new Getter() { public int get() { return prefs.saveAs(); } },
@@ -112,6 +114,13 @@ public final class SettingsActivity extends BaseActivity {
 
         // ---------------------------------------------------------------- appearance
         section("Appearance");
+        LinearLayout idRow = row(Branding.doc() ? R.drawable.ic_doc : R.drawable.ic_radiology, "App name and icon", Branding.name());
+        ImageView idIcon = new ImageView(this);
+        idIcon.setImageResource(Branding.icon(Branding.current()));
+        idRow.addView(idIcon, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
+        idRow.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { pickIdentity(); }
+        });
         LinearLayout accentRow = row(R.drawable.ic_palette, "Accent colour", Ui.ACCENT_NAMES[prefs.accent()]);
         View swatch = new View(this);
         swatch.setBackground(Ui.oval(Ui.ACCENT));
@@ -147,12 +156,22 @@ public final class SettingsActivity extends BaseActivity {
 
         // ---------------------------------------------------------------- about
         section("About");
+        LinearLayout about = row(R.drawable.ic_info, "About " + Branding.name(), "Story, privacy, source code, support");
+        ImageView chevA = new ImageView(this);
+        chevA.setImageDrawable(Ui.icon(this, R.drawable.ic_next, Ui.MUTED));
+        about.addView(chevA, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
+        about.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { startActivity(new Intent(SettingsActivity.this, AboutActivity.class)); }
+        });
         String cam = getIntent().getStringExtra(EXTRA_CAMERA);
         info(R.drawable.ic_add_photo, "Capture resolution", (cam == null ? "Camera not started" : cam)
                 + ". For 50 MP+ modes, shoot with your camera app and import the photo.");
         String ver = "";
         try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
-        info(R.drawable.ic_info, "RadioFilm Scanner " + ver, "Scans stay on this phone until you save or share them.");
+        LinearLayout upd = row(R.drawable.ic_upload, "Check for updates", "You have version " + ver);
+        upd.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { AboutActivity.checkForUpdates(SettingsActivity.this); }
+        });
     }
 
     @Override
@@ -247,6 +266,84 @@ public final class SettingsActivity extends BaseActivity {
                     .setNegativeButton("Cancel", null)
                     .show();
         }
+    }
+
+    /** Choose between RadioFilm Scanner and DocScanner: two cards with icon, name and what each is for. */
+    private void pickIdentity() {
+        final android.app.Dialog[] holder = new android.app.Dialog[1];
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), 0);
+        c.addView(Ui.text(this, "App name and icon", 19, Ui.LIGHT, true));
+        TextView sub = Ui.text(this, "Same app and features either way. This changes the name and icon on your home screen, the folders files are saved in, and (optionally) the name suggestions.", 13, Ui.MUTED, false);
+        sub.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        c.addView(sub);
+        String[] uses = {
+                "For CT, MRI and X-ray films on a lightbox, and radiology reports. Radiology name suggestions (modality, body part, technique). Saves to \u201cRadioFilm Scanner\u201d folders.",
+                "For everyday paperwork: reports, prescriptions, bills, forms, notes and whiteboards. Document name suggestions. Saves to \u201cDocScanner\u201d folders."};
+        for (int id = 0; id < 2; id++) {
+            final int which = id;
+            boolean current = Branding.current() == id;
+            LinearLayout card = new LinearLayout(this);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14), Ui.dp(this, 12));
+            card.setBackground(Ui.ripple(current ? Ui.round(Ui.accentA(0x24), Ui.dp(this, 16), Ui.ACCENT, Ui.dp(this, 2))
+                    : Ui.round(Ui.PANEL_HI, Ui.dp(this, 16)), true));
+            ImageView iv = new ImageView(this);
+            iv.setImageResource(Branding.icon(id));
+            card.addView(iv, new LinearLayout.LayoutParams(Ui.dp(this, 52), Ui.dp(this, 52)));
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            texts.setPadding(Ui.dp(this, 14), 0, 0, 0);
+            texts.addView(Ui.text(this, Branding.name(id) + (current ? "  \u2713" : ""), 16, current ? Ui.ACCENT : Ui.LIGHT, true));
+            TextView u = Ui.text(this, uses[id], 12.5f, Ui.MUTED, false);
+            u.setPadding(0, Ui.dp(this, 3), 0, 0);
+            texts.addView(u);
+            card.addView(texts, Ui.weight(1));
+            card.setClickable(true);
+            Ui.pressable(card);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = Ui.dp(this, 10);
+            c.addView(card, lp);
+            card.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (holder[0] != null) holder[0].dismiss();
+                    if (which != Branding.current()) confirmIdentity(which);
+                }
+            });
+        }
+        holder[0] = Ui.sheet(this, c);
+    }
+
+    private void confirmIdentity(final int id) {
+        final android.widget.CheckBox cb = new android.widget.CheckBox(this);
+        cb.setText(id == Branding.DOCSCANNER ? "Also switch name suggestions to Documents and General"
+                : "Also switch name suggestions to Radiology");
+        cb.setChecked(true);
+        cb.setTextColor(Ui.LIGHT);
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        int p = Ui.dp(this, 22);
+        l.setPadding(p, Ui.dp(this, 8), p, 0);
+        TextView msg = Ui.text(this, "Files you already saved stay where they are; new ones go to Pictures/" + Branding.name(id)
+                + " and Download/" + Branding.name(id) + ".\n\nYour home-screen icon may disappear. If it does, add "
+                + Branding.name(id) + " again from the app drawer; it can take a few seconds to appear.", 14, Ui.MUTED, false);
+        l.addView(msg);
+        l.addView(cb);
+        new AlertDialog.Builder(this)
+                .setTitle("Switch to " + Branding.name(id) + "?")
+                .setView(l)
+                .setPositiveButton("Switch", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        Branding.switchTo(SettingsActivity.this, id, cb.isChecked());
+                        toast("Now " + Branding.name(id));
+                        recreate();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void updateExample() {

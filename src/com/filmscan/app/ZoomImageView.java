@@ -50,6 +50,14 @@ public final class ZoomImageView extends View {
         boxLine.setColor(Ui.ACCENT); boxLine.setStyle(Paint.Style.STROKE); boxLine.setStrokeWidth(1.5f * dp);
         drawP.setColor(0x99000000);
         sgd = new ScaleGestureDetector(c, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            float fx, fy;
+
+            @Override
+            public boolean onScaleBegin(ScaleGestureDetector d) {
+                fx = d.getFocusX(); fy = d.getFocusY();
+                return true;
+            }
+
             @Override
             public boolean onScale(ScaleGestureDetector d) {
                 float cur = currentScale();
@@ -57,6 +65,8 @@ public final class ZoomImageView extends View {
                 float target = Math.max(fitScale, Math.min(fitScale * 10, cur * f));
                 f = target / cur;
                 m.postScale(f, f, d.getFocusX(), d.getFocusY());
+                m.postTranslate(d.getFocusX() - fx, d.getFocusY() - fy);   // two-finger pan
+                fx = d.getFocusX(); fy = d.getFocusY();
                 fix();
                 invalidate();
                 return true;
@@ -202,7 +212,6 @@ public final class ZoomImageView extends View {
             for (float[] b : boxes) {
                 r.set(b[0] * bw, b[1] * bh, b[2] * bw, b[3] * bh);
                 m.mapRect(r);
-                c.drawRect(r, boxP);
                 if (redactMode) c.drawRect(r, boxLine);
             }
         }

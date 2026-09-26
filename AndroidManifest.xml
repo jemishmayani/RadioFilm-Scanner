@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.filmscan.app"
-    android:versionCode="6"
-    android:versionName="1.5">
+    android:versionCode="8"
+    android:versionName="1.7.0">
 
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="36" />
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
@@ -29,29 +29,52 @@
         <activity
             android:name=".CameraActivity"
             android:exported="true"
-            android:configChanges="keyboardHidden|screenSize|smallestScreenSize|screenLayout">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter android:label="Scan with RadioFilm Scanner">
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout">
+            <intent-filter android:label="Scan and crop">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <intent-filter android:label="Scan with RadioFilm Scanner">
+            <intent-filter android:label="Scan and crop">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
 
-        <activity android:name=".SavedActivity" android:exported="false" />
-        <activity android:name=".SavedViewActivity" android:exported="false" />
-        <activity android:name=".RearrangeActivity" android:exported="false" />
-        <activity android:name=".SuggestionsActivity" android:exported="false" />
-        <activity android:name=".SettingsActivity" android:exported="false" />
-        <activity android:name=".EditActivity" android:exported="false" />
+        <!-- Two launcher entries for the same camera screen; Settings > Appearance enables one. -->
+        <activity-alias
+            android:name=".LauncherRadioFilm"
+            android:targetActivity=".CameraActivity"
+            android:label="RadioFilm Scanner"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherDocScanner"
+            android:targetActivity=".CameraActivity"
+            android:label="DocScanner"
+            android:icon="@mipmap/ic_launcher_doc"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity android:name=".SavedActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".SavedViewActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".RearrangeActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".SuggestionsActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".AboutActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".SettingsActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".EditActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <provider
             android:name=".ShareProvider"

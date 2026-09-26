@@ -18,6 +18,9 @@ public final class PdfWriter {
     private final List<Integer> pageIds = new ArrayList<Integer>();
     private int nextId = 3; // 1 = catalog, 2 = pages
     private boolean finished;
+    private String producer = "RadioFilm Scanner";
+
+    public void setProducer(String p) { if (p != null) producer = p; }
 
     public PdfWriter(OutputStream out) throws IOException {
         this.out = out;
@@ -40,13 +43,35 @@ public final class PdfWriter {
      * at 842 pt (A4 height) so it prints naturally; the image keeps all of its pixels.
      */
     public void addJpegPage(byte[] jpeg, int pxW, int pxH, boolean gray) throws IOException {
+        addJpegPage(new java.io.ByteArrayInputStream(jpeg), jpeg.length, pxW, pxH);
+    }
+
+    /** Adds a page from a JPEG file, copied in small chunks so it never has to fit in memory. */
+    public void addJpegPage(java.io.File jpeg, int pxW, int pxH, boolean gray) throws IOException {
+        java.io.InputStream in = new java.io.BufferedInputStream(new java.io.FileInputStream(jpeg), 1 << 16);
+        try {
+            addJpegPage(in, jpeg.length(), pxW, pxH);
+        } finally {
+            in.close();
+        }
+    }
+
+    private void addJpegPage(java.io.InputStream jpeg, long length, int pxW, int pxH) throws IOException {
         double s = 842.0 / Math.max(pxW, pxH);
         String pw = fmt(pxW * s), ph = fmt(pxH * s);
         int img = nextId++, content = nextId++, page = nextId++;
         beginObj(img);
         write("<< /Type /XObject /Subtype /Image /Width " + pxW + " /Height " + pxH
-                + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpeg.length + " >>\nstream\n");
-        write(jpeg);
+                + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + length + " >>\nstream\n");
+        byte[] buf = new byte[1 << 16];
+        long copied = 0;
+        int n;
+        while ((n = jpeg.read(buf)) > 0) {
+            out.write(buf, 0, n);
+            pos += n;
+            copied += n;
+        }
+        if (copied != length) throw new IOException("JPEG size changed while writing the PDF");
         write("\nendstream\nendobj\n");
         String cs = "q " + pw + " 0 0 " + ph + " 0 0 cm /Im0 Do Q\n";
         beginObj(content);
@@ -68,7 +93,7 @@ public final class PdfWriter {
         write("<< /Type /Pages /Kids [" + kids + "] /Count " + pageIds.size() + " >>\nendobj\n");
         int info = nextId++;
         beginObj(info);
-        write("<< /Title (" + escape(title) + ") /Producer (RadioFilm Scanner) >>\nendobj\n");
+        write("<< /Title (" + escape(title) + ") /Producer (" + escape(producer) + ") >>\nendobj\n");
         long xref = pos;
         int size = nextId;
         StringBuilder sb = new StringBuilder();

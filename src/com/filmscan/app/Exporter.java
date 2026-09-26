@@ -26,7 +26,8 @@ public final class Exporter {
     private Exporter() {}
 
     public static final int JPEG = 0, PNG = 1, PDF = 2;
-    public static final String FOLDER = "RadioFilm Scanner";
+    /** Folder under Pictures/ and Download/ (follows the app name: RadioFilm Scanner or DocScanner). */
+    public static String folder() { return Branding.folder(); }
 
     public interface Progress { void step(int done, int total); }
 
@@ -69,18 +70,19 @@ public final class Exporter {
                     ContentValues v = new ContentValues();
                     v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
                     v.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
-                    v.put("relative_path", Environment.DIRECTORY_DOWNLOADS + "/" + FOLDER);
+                    v.put("relative_path", Environment.DIRECTORY_DOWNLOADS + "/" + folder());
                     v.put("is_pending", 1);
                     pdfUri = ctx.getContentResolver().insert(Uri.parse("content://media/external/downloads"), v);
                     if (pdfUri == null) throw new IOException("Could not create the PDF in Downloads");
                     pdfOut = ctx.getContentResolver().openOutputStream(pdfUri);
                 } else {
-                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), FOLDER);
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), folder());
                     dir.mkdirs();
                     pdfFile = unique(dir, safe, ".pdf");
                     pdfOut = new FileOutputStream(pdfFile);
                 }
                 pdf = new PdfWriter(new BufferedOutputStream(pdfOut, 1 << 16));
+                pdf.setProducer(Branding.name());
             }
             for (int pi = 0; pi < pages.size(); pi++) {
                 Page p = pages.get(pi).copy();
@@ -111,9 +113,19 @@ public final class Exporter {
                     String name = safe + (pages.size() > 1 ? "_p" + (pi + 1) : "")
                             + (parts.size() > 1 ? "_" + (k / cols + 1) + "x" + (k % cols + 1) : "");
                     if (format == PDF) {
-                        ByteArrayOutputStream bo = new ByteArrayOutputStream(b.getWidth() * b.getHeight() / 3);
-                        b.compress(Bitmap.CompressFormat.JPEG, quality, bo);
-                        pdf.addJpegPage(bo.toByteArray(), b.getWidth(), b.getHeight(), Filters.isGray(p.filter));
+                        // each page is encoded to a temporary file and streamed into the PDF
+                        File tmp = File.createTempFile("pdfpage", ".jpg", ctx.getCacheDir());
+                        try {
+                            OutputStream to = new BufferedOutputStream(new FileOutputStream(tmp), 1 << 16);
+                            try {
+                                if (!b.compress(Bitmap.CompressFormat.JPEG, quality, to)) throw new IOException("Could not encode the page");
+                            } finally {
+                                to.close();
+                            }
+                            pdf.addJpegPage(tmp, b.getWidth(), b.getHeight(), Filters.isGray(p.filter));
+                        } finally {
+                            tmp.delete();
+                        }
                     } else if (forShare) {
                         File f = new File(shareDir, name + (format == PNG ? ".png" : ".jpg"));
                         writeBitmap(b, format, quality, new FileOutputStream(f));
@@ -149,9 +161,9 @@ public final class Exporter {
                     MediaScannerConnection.scanFile(ctx, new String[]{pdfFile.getPath()}, new String[]{"application/pdf"}, null);
                     res.uris.add(Uri.fromFile(pdfFile));
                 }
-                res.where = "Download/" + FOLDER;
+                res.where = "Download/" + folder();
             } else {
-                res.where = "Pictures/" + FOLDER;
+                res.where = "Pictures/" + folder();
             }
         } catch (Throwable t) {
             Log.e("FilmScan", "export failed", t);
@@ -194,7 +206,7 @@ public final class Exporter {
             ContentValues v = new ContentValues();
             v.put(MediaStore.MediaColumns.DISPLAY_NAME, name + ext);
             v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-            v.put("relative_path", Environment.DIRECTORY_PICTURES + "/" + FOLDER);
+            v.put("relative_path", Environment.DIRECTORY_PICTURES + "/" + folder());
             v.put("is_pending", 1);
             Uri uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
             if (uri == null) throw new IOException("Could not create the image in Pictures");
@@ -209,8 +221,8 @@ public final class Exporter {
             cr.update(uri, v, null, null);
             return uri;
         }
-        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), FOLDER);
-        if (!dir.exists() && !dir.mkdirs()) throw new IOException("Could not create Pictures/" + FOLDER);
+        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), folder());
+        if (!dir.exists() && !dir.mkdirs()) throw new IOException("Could not create Pictures/" + folder());
         File f = unique(dir, name, ext);
         writeBitmap(b, format, quality, new FileOutputStream(f));
         MediaScannerConnection.scanFile(ctx, new String[]{f.getPath()}, new String[]{mime}, null);

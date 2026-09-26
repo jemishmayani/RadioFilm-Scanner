@@ -31,6 +31,9 @@ public final class Session {
         load();
     }
 
+    /** When this workspace was last saved (0 if never). */
+    public long lastSaved() { return json.lastModified(); }
+
     public File newImageFile(String ext) {
         return new File(dir, UUID.randomUUID().toString() + ext);
     }

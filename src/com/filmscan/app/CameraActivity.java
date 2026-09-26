@@ -77,9 +77,10 @@ import java.util.concurrent.TimeUnit;
 public final class CameraActivity extends BaseActivity {
     private static final String TAG = "FilmScan";
     private static final int REQ_CAMERA = 1, REQ_IMPORT = 2;
-    public static final String EXTRA_SAVED = "savedName", EXTRA_ADD = "addToGroup";
+    public static final String EXTRA_SAVED = "savedName", EXTRA_ADD = "addToGroup", EXTRA_WHERE = "savedWhere";
     private boolean addMode;          // opened from the editor to add pages; returns there
     private String firstNewId;        // first page shot since the editor was last opened
+    private boolean lowStorageWarned;
     private LinearLayout addBar;
     private static final int ST_PREVIEW = 0, ST_WAIT_LOCK = 1, ST_WAIT_PRE = 2, ST_WAIT_NON_PRE = 3, ST_TAKEN = 4;
 
@@ -150,10 +151,12 @@ public final class CameraActivity extends BaseActivity {
         prefs = app.prefs();
         addMode = getIntent().getBooleanExtra(EXTRA_ADD, false);
         if (b != null) firstNewId = b.getString("firstNewId");
+        if (addMode) setBackHandler(new Runnable() { @Override public void run() { finishAdd(firstNewId); } });
         session = app.session();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().setStatusBarColor(0xFF000000);
-        getWindow().setNavigationBarColor(0xFF000000);
+        WindowManager.LayoutParams wlp = getWindow().getAttributes();
+        wlp.rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_CROSSFADE;
+        getWindow().setAttributes(wlp);
         buildUi();
         orientationListener = new OrientationEventListener(this) {
             @Override
@@ -169,8 +172,150 @@ public final class CameraActivity extends BaseActivity {
         } catch (Throwable t) {
             sound = null;
         }
+        boolean fromOutside = getIntent() != null && (Intent.ACTION_SEND.equals(getIntent().getAction())
+                || Intent.ACTION_SEND_MULTIPLE.equals(getIntent().getAction()) || getIntent().hasExtra(EXTRA_SAVED));
         handleShareIntent(getIntent());
         handleSavedIntent(getIntent());
+        if (!addMode && b == null && !fromOutside && !app.recoveryChecked) offerRecovery();
+        app.recoveryChecked = true;
+    }
+
+    /**
+     * Fresh start with work left over (after a crash, or Android closing the app in the background):
+     * offer to resume it or discard it. Everything was already saved to disk after each change.
+     */
+    private void offerRecovery() {
+        final String editingId = prefs.editingId();
+        final SavedStore.Entry entry = editingId == null ? null : app.saved().find(editingId);
+        final Session main = app.mainSession();
+        final List<Page> pages;
+        final long when;
+        if (entry != null) {
+            pages = app.saved().pages(entry);
+            when = new File(entry.dir, "pages.json").lastModified();
+        } else {
+            pages = new ArrayList<Page>(main.pages);
+            when = main.lastSaved();
+        }
+        if (pages.isEmpty()) return;
+        app.main.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (isFinishing()) return;
+                showRecoverySheet(entry, pages, when);
+            }
+        }, 450);
+    }
+
+    private void showRecoverySheet(final SavedStore.Entry entry, final List<Page> pages, long when) {
+        final android.app.Dialog[] holder = new android.app.Dialog[1];
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(this, 20);
+        c.setPadding(pad, 0, pad, 0);
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView badge = new ImageView(this);
+        badge.setImageDrawable(Ui.icon(this, R.drawable.ic_restore, Ui.ON_ACCENT));
+        badge.setScaleType(ImageView.ScaleType.CENTER);
+        badge.setBackground(Ui.oval(Ui.ACCENT));
+        head.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(Ui.dp(this, 14), 0, 0, 0);
+        titles.addView(Ui.text(this, entry != null ? "Continue editing?" : "Unfinished scan", 19, Ui.LIGHT, true));
+        String count = pages.size() == 1 ? "1 page" : pages.size() + " pages";
+        String date = when > 0 ? " · " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(new java.util.Date(when)) : "";
+        TextView sub = Ui.text(this, (entry != null ? "\u201c" + entry.name + "\u201d · " : "") + count + date, 13, Ui.MUTED, false);
+        sub.setSingleLine(true);
+        sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titles.addView(sub);
+        head.addView(titles, Ui.weight(1));
+        c.addView(head, new LinearLayout.LayoutParams(-1, -2));
+
+        // thumbnails of what will be resumed
+        LinearLayout thumbs = new LinearLayout(this);
+        thumbs.setPadding(0, Ui.dp(this, 16), 0, 0);
+        for (int i = 0; i < Math.min(5, pages.size()); i++) {
+            final ImageView iv = new ImageView(this);
+            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            iv.setBackground(Ui.round(0xFF22384D, Ui.dp(this, 8)));
+            int p = Ui.dp(this, 3);
+            iv.setPadding(p, p, p, p);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 52), Ui.dp(this, 68));
+            lp.rightMargin = Ui.dp(this, 8);
+            thumbs.addView(iv, lp);
+            final Page snap = pages.get(i).copy();
+            app.run(new Runnable() {
+                @Override
+                public void run() {
+                    final Bitmap t = Imaging.renderFinished(snap, 200);
+                    app.ui(new Runnable() { @Override public void run() { if (t != null) iv.setImageBitmap(t); } });
+                }
+            });
+        }
+        if (pages.size() > 5) {
+            TextView more = Ui.text(this, "+" + (pages.size() - 5), 14, Ui.MUTED, true);
+            more.setGravity(Gravity.CENTER);
+            thumbs.addView(more, new LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 68)));
+        }
+        c.addView(thumbs);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        final TextView discard = Ui.button(this, entry != null ? "Close" : "Discard", false);
+        TextView resume = Ui.button(this, "Resume", true);
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1);
+        dl.rightMargin = Ui.dp(this, 12);
+        actions.addView(discard, dl);
+        actions.addView(resume, new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1));
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
+        al.topMargin = Ui.dp(this, 20);
+        c.addView(actions, al);
+        if (entry != null) {
+            TextView note = Ui.text(this, "Your changes are already kept in this saved scan.", 12.5f, Ui.MUTED, false);
+            note.setPadding(0, Ui.dp(this, 10), 0, 0);
+            c.addView(note);
+        }
+        holder[0] = Ui.sheet(this, c);
+        Ui.reveal(thumbs, 60);
+        resume.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                holder[0].dismiss();
+                Session s = entry != null ? app.beginEdit(entry) : app.mainSession();
+                if (s.pages.isEmpty()) return;
+                startActivity(EditActivity.intent(CameraActivity.this, s.pages.get(0).id));
+            }
+        });
+        final boolean[] armed = {false};
+        discard.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (entry != null) {                       // edits already live in the saved scan
+                    app.endEdit();
+                    holder[0].dismiss();
+                    return;
+                }
+                if (!armed[0]) {                           // second tap confirms a discard
+                    armed[0] = true;
+                    discard.setText("Tap again to discard");
+                    discard.setTextColor(Ui.DANGER);
+                    app.main.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            armed[0] = false;
+                            discard.setText("Discard");
+                            discard.setTextColor(Ui.LIGHT);
+                        }
+                    }, 3000);
+                    return;
+                }
+                app.mainSession().clear();
+                holder[0].dismiss();
+                refreshPagesButton();
+            }
+        });
     }
 
     @Override
@@ -193,7 +338,9 @@ public final class CameraActivity extends BaseActivity {
         i.removeExtra(EXTRA_SAVED);
         smooth = null;
         overlay.setQuad(null);
-        showHint("Saved \u201c" + name + "\u201d. Find it in Saved scans (top bar).", 4500);
+        String where = i.getStringExtra(EXTRA_WHERE);
+        i.removeExtra(EXTRA_WHERE);
+        showHint("Saved \u201c" + name + "\u201d" + (where != null ? " to " + where : "") + ". Also in Saved scans (top bar).", 5500);
         savedBtn.getDrawable().setTint(Ui.ACCENT);
         savedBtn.animate().scaleX(1.25f).scaleY(1.25f).setDuration(180).withEndAction(new Runnable() {
             @Override
@@ -373,78 +520,34 @@ public final class CameraActivity extends BaseActivity {
         pagesBtn.setClickable(true);
         rotatables.add(pagesBtn);
 
-        if (landscape) {
-            // tablet held sideways: tools on the left, capture controls on the right, like a camera app
-            LinearLayout row = new LinearLayout(this);
-            root.addView(row, new FrameLayout.LayoutParams(-1, -1));
-            LinearLayout left = new LinearLayout(this);
-            left.setOrientation(LinearLayout.VERTICAL);
-            left.setGravity(Gravity.CENTER_HORIZONTAL);
-            left.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 12));
-            left.addView(flashBtn);
-            left.addView(gridBtn);
-            left.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
-            left.addView(resLabel, new LinearLayout.LayoutParams(-2, -2));
-            left.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
-            left.addView(savedBtn);
-            left.addView(settingsBtn);
-            row.addView(left, new LinearLayout.LayoutParams(Ui.dp(this, 76), -1));
-            row.addView(preview, new LinearLayout.LayoutParams(0, -1, 1f));
-            LinearLayout right = new LinearLayout(this);
-            right.setOrientation(LinearLayout.VERTICAL);
-            right.setGravity(Gravity.CENTER_HORIZONTAL);
-            right.setPadding(0, Ui.dp(this, 20), 0, Ui.dp(this, 20));
-            right.addView(pagesBtn, new LinearLayout.LayoutParams(Ui.dp(this, 60), Ui.dp(this, 60)));
-            right.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
-            LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2, -2);
-            ml.bottomMargin = Ui.dp(this, 16);
-            right.addView(modes, ml);
-            right.addView(shutter, new LinearLayout.LayoutParams(Ui.dp(this, 78), Ui.dp(this, 78)));
-            right.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
-            right.addView(galleryBtn, new LinearLayout.LayoutParams(Ui.dp(this, 54), Ui.dp(this, 54)));
-            row.addView(right, new LinearLayout.LayoutParams(Ui.dp(this, 132), -1));
-        } else {
-            LinearLayout col = new LinearLayout(this);
-            col.setOrientation(LinearLayout.VERTICAL);
-            root.addView(col, new FrameLayout.LayoutParams(-1, -1));
-            LinearLayout top = Ui.topBar(this);
-            top.setBackgroundColor(0xFF000000);
-            top.addView(flashBtn);
-            top.addView(gridBtn);
-            top.addView(resLabel, Ui.weight(1));
-            top.addView(savedBtn);
-            top.addView(settingsBtn);
-            col.addView(top, new LinearLayout.LayoutParams(-1, -2));
-            col.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
-            LinearLayout bottom = new LinearLayout(this);
-            bottom.setOrientation(LinearLayout.VERTICAL);
-            bottom.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 18));
-            bottom.addView(modes, new LinearLayout.LayoutParams(-1, -2));
-            FrameLayout controls = new FrameLayout(this);
-            int side = Ui.dp(this, 32);
-            FrameLayout.LayoutParams glp = Ui.frame(Ui.dp(this, 54), Ui.dp(this, 54), Gravity.CENTER_VERTICAL | Gravity.START);
-            glp.leftMargin = side;
-            controls.addView(galleryBtn, glp);
-            controls.addView(shutter, Ui.frame(Ui.dp(this, 78), Ui.dp(this, 78), Gravity.CENTER));
-            FrameLayout.LayoutParams plp = Ui.frame(Ui.dp(this, 60), Ui.dp(this, 60), Gravity.CENTER_VERTICAL | Gravity.END);
-            plp.rightMargin = side;
-            controls.addView(pagesBtn, plp);
-            bottom.addView(controls, new LinearLayout.LayoutParams(-1, Ui.dp(this, 96)));
-            col.addView(bottom, new LinearLayout.LayoutParams(-1, -2));
-        }
+        rootView = root;
+        previewArea = preview;
+        modesRow = modes;
+        // the preview is never moved again: moving it would shut the camera feed down
+        root.addView(preview, new FrameLayout.LayoutParams(-1, -1));
+        arrange(landscape);
         setContentView(root);
 
         // re-apply the preview transform whenever the preview is laid out again
         tex.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
             @Override
             public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
-                if (r - l != or - ol || b - t != ob - ot) configureTransform(r - l, b - t);
+                if (r - l != or - ol || b - t != ob - ot) {
+                    if (tex.isAvailable()) keepBufferSize(tex.getSurfaceTexture());
+                    configureTransform(r - l, b - t);
+                }
             }
         });
 
         tex.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) { if (resumed) openCamera(); }
-            @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { configureTransform(w, h); }
+            @Override
+            public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {
+                // TextureView resets the feed's picture size to its own size whenever it is resized;
+                // the camera keeps sending the configured size, which stretches the picture. Restore it.
+                keepBufferSize(st);
+                configureTransform(w, h);
+            }
             @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return true; }
             @Override public void onSurfaceTextureUpdated(SurfaceTexture st) { }
         });
@@ -514,6 +617,98 @@ public final class CameraActivity extends BaseActivity {
         });
     }
 
+    private FrameLayout rootView, previewArea;
+    private LinearLayout modesRow;
+    private final List<View> chrome = new ArrayList<View>();
+    private boolean arrangedLandscape;
+
+    private static void detach(View v) {
+        if (v.getParent() instanceof ViewGroup) ((ViewGroup) v.getParent()).removeView(v);
+    }
+
+    /**
+     * Places the controls around the preview: bars above and below in portrait; tools on the left and
+     * capture controls on the right in landscape (like a camera app). Only the controls move, so
+     * turning a tablet doesn't restart the camera.
+     */
+    private void arrange(boolean land) {
+        arrangedLandscape = land;
+        for (View v : chrome) rootView.removeView(v);
+        chrome.clear();
+        for (View v : new View[]{flashBtn, gridBtn, resLabel, savedBtn, settingsBtn, modesRow, galleryBtn, shutter, pagesBtn}) detach(v);
+        modesRow.setOrientation(land ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) previewArea.getLayoutParams();
+        if (land) {
+            LinearLayout left = new LinearLayout(this);
+            left.setOrientation(LinearLayout.VERTICAL);
+            left.setGravity(Gravity.CENTER_HORIZONTAL);
+            left.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 12));
+            left.addView(flashBtn);
+            left.addView(gridBtn);
+            left.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
+            left.addView(resLabel, new LinearLayout.LayoutParams(-2, -2));
+            left.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
+            left.addView(savedBtn);
+            left.addView(settingsBtn);
+            addChrome(left, Ui.frame(Ui.dp(this, 76), -1, Gravity.START));
+            LinearLayout right = new LinearLayout(this);
+            right.setOrientation(LinearLayout.VERTICAL);
+            right.setGravity(Gravity.CENTER_HORIZONTAL);
+            right.setPadding(0, Ui.dp(this, 20), 0, Ui.dp(this, 20));
+            right.addView(pagesBtn, new LinearLayout.LayoutParams(Ui.dp(this, 60), Ui.dp(this, 60)));
+            right.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
+            LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-2, -2);
+            ml.bottomMargin = Ui.dp(this, 16);
+            right.addView(modesRow, ml);
+            right.addView(shutter, new LinearLayout.LayoutParams(Ui.dp(this, 78), Ui.dp(this, 78)));
+            right.addView(spacerV(), new LinearLayout.LayoutParams(1, 0, 1f));
+            right.addView(galleryBtn, new LinearLayout.LayoutParams(Ui.dp(this, 54), Ui.dp(this, 54)));
+            addChrome(right, Ui.frame(Ui.dp(this, 132), -1, Gravity.END));
+            plp.setMargins(Ui.dp(this, 76), 0, Ui.dp(this, 132), 0);
+        } else {
+            LinearLayout top = Ui.topBar(this);
+            top.setBackgroundColor(0xFF000000);
+            top.addView(flashBtn);
+            top.addView(gridBtn);
+            top.addView(resLabel, Ui.weight(1));
+            top.addView(savedBtn);
+            top.addView(settingsBtn);
+            addChrome(top, Ui.frame(-1, Ui.dp(this, 56), Gravity.TOP));
+            LinearLayout bottom = new LinearLayout(this);
+            bottom.setOrientation(LinearLayout.VERTICAL);
+            bottom.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 16));
+            bottom.addView(modesRow, new LinearLayout.LayoutParams(-1, Ui.dp(this, 40)));
+            FrameLayout controls = new FrameLayout(this);
+            int side = Ui.dp(this, 32);
+            FrameLayout.LayoutParams glp = Ui.frame(Ui.dp(this, 54), Ui.dp(this, 54), Gravity.CENTER_VERTICAL | Gravity.START);
+            glp.leftMargin = side;
+            controls.addView(galleryBtn, glp);
+            controls.addView(shutter, Ui.frame(Ui.dp(this, 78), Ui.dp(this, 78), Gravity.CENTER));
+            FrameLayout.LayoutParams pl = Ui.frame(Ui.dp(this, 60), Ui.dp(this, 60), Gravity.CENTER_VERTICAL | Gravity.END);
+            pl.rightMargin = side;
+            controls.addView(pagesBtn, pl);
+            bottom.addView(controls, new LinearLayout.LayoutParams(-1, Ui.dp(this, 96)));
+            addChrome(bottom, Ui.frame(-1, Ui.dp(this, 160), Gravity.BOTTOM));
+            plp.setMargins(0, Ui.dp(this, 56), 0, Ui.dp(this, 160));
+        }
+        previewArea.setLayoutParams(plp);
+    }
+
+    private void addChrome(View v, FrameLayout.LayoutParams lp) {
+        rootView.addView(v, lp);
+        chrome.add(v);
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        boolean land = c.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        if (land != arrangedLandscape) arrange(land);
+        app.main.post(new Runnable() {
+            @Override public void run() { refreshGeometry(); rotateIcons(); }
+        });
+    }
+
     /** Flexible empty space inside a vertical column (explicit size, never wrap-content). */
     private View spacerV() { return new View(this); }
 
@@ -545,7 +740,7 @@ public final class CameraActivity extends BaseActivity {
         TextView t = Ui.text(this, "Camera access is off", 19, Ui.LIGHT, true);
         t.setGravity(Gravity.CENTER);
         p.addView(t);
-        TextView d = Ui.text(this, "RadioFilm Scanner uses the camera to photograph films and reports. You can still import photos from your gallery.", 14.5f, Ui.MUTED, false);
+        TextView d = Ui.text(this, Branding.name() + " uses the camera to photograph films and documents. You can still import photos from your gallery.", 14.5f, Ui.MUTED, false);
         d.setGravity(Gravity.CENTER);
         d.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 20));
         p.addView(d);
@@ -559,7 +754,7 @@ public final class CameraActivity extends BaseActivity {
                     try {
                         startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
                     } catch (ActivityNotFoundException e) {
-                        Toast.makeText(CameraActivity.this, "Open Settings > Apps > RadioFilm Scanner > Permissions", Toast.LENGTH_LONG).show();
+                        Toast.makeText(CameraActivity.this, "Open Settings > Apps > RadioFilm Scanner > Permissions (the app keeps this name in system settings)", Toast.LENGTH_LONG).show();
                     }
                 }
             }
@@ -630,11 +825,6 @@ public final class CameraActivity extends BaseActivity {
         finish();
     }
 
-    @Override
-    public void onBackPressed() {
-        if (addMode) finishAdd(firstNewId);
-        else super.onBackPressed();
-    }
 
     private void cycleFlash() {
         if (!flashAvailable) { showHint("This camera has no flash", 1800); return; }
@@ -823,9 +1013,16 @@ public final class CameraActivity extends BaseActivity {
         tex.setTransform(m);
     }
 
+    /** Keeps the preview buffer at the size the camera session was configured with. */
+    private void keepBufferSize(SurfaceTexture st) {
+        Size ps = previewSize;
+        if (st != null && ps != null) st.setDefaultBufferSize(ps.getWidth(), ps.getHeight());
+    }
+
     /** Re-checks shape and rotation, e.g. after a 180 degree turn that does not restart the screen. */
     private void refreshGeometry() {
         if (previewSize == null) return;
+        if (tex.isAvailable()) keepBufferSize(tex.getSurfaceTexture());
         applyAspect();
         configureTransform(tex.getWidth(), tex.getHeight());
     }
@@ -1272,9 +1469,18 @@ public final class CameraActivity extends BaseActivity {
         if (!Imaging.probe(p)) { f.delete(); showHint("The photo could not be read. Try again.", 2500); return; }
         session.add(p);
         if (firstNewId == null) firstNewId = p.id;
+        long free = Storage.freeBytes();
+        if (!lowStorageWarned && free >= 0 && free < 300L * 1024 * 1024) {
+            lowStorageWarned = true;
+            showHint("Storage almost full: " + Storage.human(free) + " left", 4000);
+        }
         if (prefs.batch() || !resumed) {
             refreshPagesButton();
             showHint("Page " + session.pages.size() + " added", 1500);
+            pagesBtn.setScaleX(0.8f);
+            pagesBtn.setScaleY(0.8f);
+            pagesBtn.animate().scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(320)
+                    .setInterpolator(new android.view.animation.OvershootInterpolator(3f)).start();
             app.run(new Runnable() {
                 @Override
                 public void run() {
@@ -1357,8 +1563,12 @@ public final class CameraActivity extends BaseActivity {
             return;
         }
         missCount = 0;
-        if (smooth == null || maxDelta(smooth, n) > 0.12f) smooth = n.clone();
-        else for (int i = 0; i < 8; i++) smooth[i] += (n[i] - smooth[i]) * 0.55f;
+        // light filtering of detector jitter; the overlay then glides smoothly between results
+        if (smooth == null) smooth = n.clone();
+        else {
+            float gain = maxDelta(smooth, n) > 0.08f ? 0.8f : 0.5f;   // follow real moves quickly, damp jitter
+            for (int i = 0; i < 8; i++) smooth[i] += (n[i] - smooth[i]) * gain;
+        }
         overlay.setQuad(smooth.clone());
         if (auto && !capturing && now > cooldownUntil) {
             if (capturedQuad != null && maxDelta(capturedQuad, n) < 0.06f) {
@@ -1367,7 +1577,6 @@ public final class CameraActivity extends BaseActivity {
                 if (lastRaw == null || maxDelta(lastRaw, n) > 0.02f || steadySince == 0) steadySince = now;
                 float prog = Math.min(1f, (now - steadySince) / 1400f);
                 overlay.setSteady(prog);
-                if (prog > 0.15f && prog < 1f) showHint("Hold steady", 800);
                 if (prog >= 1f) {
                     capturedQuad = n.clone();
                     cooldownUntil = now + 2000;
@@ -1431,7 +1640,12 @@ public final class CameraActivity extends BaseActivity {
             public void run() {
                 final List<Page> added = new ArrayList<Page>();
                 int failed = 0;
+                int index = 0;
                 for (Uri u : uris) {
+                    final int num = ++index;
+                    if (uris.size() > 1) app.ui(new Runnable() {
+                        @Override public void run() { setProgress(dlg, "Importing photo " + num + " of " + uris.size() + "…", num - 1, uris.size()); }
+                    });
                     try {
                         String type = getContentResolver().getType(u);
                         String ext = type == null ? ".jpg" : type.contains("png") ? ".png" : type.contains("webp") ? ".webp"
@@ -1482,18 +1696,43 @@ public final class CameraActivity extends BaseActivity {
     }
 
     static AlertDialog progressDialog(Activity a, String msg) {
+        LinearLayout col = new LinearLayout(a);
+        col.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(a, 22);
+        col.setPadding(pad, pad, pad, Ui.dp(a, 18));
         LinearLayout l = new LinearLayout(a);
         l.setGravity(Gravity.CENTER_VERTICAL);
-        int pad = Ui.dp(a, 22);
-        l.setPadding(pad, pad, pad, pad);
-        ProgressBar pb = new ProgressBar(a);
-        l.addView(pb, new LinearLayout.LayoutParams(Ui.dp(a, 36), Ui.dp(a, 36)));
+        ProgressBar spin = new ProgressBar(a);
+        l.addView(spin, new LinearLayout.LayoutParams(Ui.dp(a, 32), Ui.dp(a, 32)));
         TextView t = Ui.text(a, msg, 15, Ui.LIGHT, false);
         t.setId(android.R.id.message);
         t.setPadding(Ui.dp(a, 16), 0, 0, 0);
         l.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        AlertDialog d = new AlertDialog.Builder(a).setView(l).setCancelable(false).create();
+        col.addView(l);
+        // determinate bar, shown once the total is known (see setProgress)
+        ProgressBar bar = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setId(android.R.id.progress);
+        bar.setVisibility(View.GONE);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(a, 8));
+        bl.topMargin = Ui.dp(a, 14);
+        col.addView(bar, bl);
+        AlertDialog d = new AlertDialog.Builder(a).setView(col).setCancelable(false).create();
         d.show();
         return d;
+    }
+
+    /** Updates a progress dialog: "text", and a bar at done/total. */
+    static void setProgress(AlertDialog d, String text, int done, int total) {
+        try {
+            TextView t = (TextView) d.findViewById(android.R.id.message);
+            ProgressBar bar = (ProgressBar) d.findViewById(android.R.id.progress);
+            if (t != null) t.setText(text);
+            if (bar != null && total > 0) {
+                bar.setVisibility(View.VISIBLE);
+                bar.setMax(total * 100);
+                android.animation.ObjectAnimator.ofInt(bar, "progress", bar.getProgress(), done * 100)
+                        .setDuration(250).start();
+            }
+        } catch (Exception ignored) { }
     }
 }

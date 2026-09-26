@@ -3,6 +3,25 @@
 All notable changes to RadioFilm Scanner. Newest first.
 Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown in brackets.
 
+## [1.7.0] (8) - 2026-09-26
+Includes the 1.6.0 test build (7), which was not published separately.
+### Added
+- **DocScanner** identity: switch the app's name, launcher icon and save folders between RadioFilm Scanner (films, radiology) and DocScanner (everyday documents) in Settings > Appearance.
+- Anonymise tools: black box, **blur** and **pixelate**.
+- **Undo / Redo** for crop, rotate, filters, adjustments, split and anonymise; **Reset** in each tool and "Reset all edits" for a page.
+- Pinch-to-zoom, two-finger pan and double-tap in crop mode; two-finger pan in the page view.
+- "HOLD STEADY" prompt with a filling ring before auto-capture.
+- Resume or discard an unfinished scan after the app was closed unexpectedly.
+- Progress bars for export and import; estimated file size and free space on the save sheet; low-storage warning in the camera.
+- Where files are saved: shown on the save sheet, after saving, in Saved scans and in Settings.
+- About screen: story, privacy, links, check for updates (opens the latest release in the browser; the app still has no internet permission), and Buy me a coffee.
+### Changed
+- Targets Android 16 (API 36): edge-to-edge layout and the new back gesture system.
+- Exports are built in strips, roughly halving peak memory; PDF pages go through temporary files.
+- The camera no longer restarts when a tablet rotates, and the page outline glides smoothly instead of jumping.
+### Fixed
+- Viewfinder that was sometimes stretched: the preview's picture size is now restored whenever the view is resized.
+
 ## [1.5] (6) - 2026-09-25
 ### Fixed
 - Stretched or sideways viewfinder on tablets whose natural orientation is landscape (e.g. Xiaomi Pad 6).

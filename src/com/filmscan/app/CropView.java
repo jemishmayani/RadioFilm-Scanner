@@ -27,6 +27,9 @@ import com.filmscan.core.Geom;
 public final class CropView extends View {
     public interface Listener {
         void onQuadChanged(boolean valid);
+
+        /** A handle is about to move (used to record undo history). */
+        void onEditStart();
     }
 
     private Bitmap bmp;
@@ -38,6 +41,11 @@ public final class CropView extends View {
     private int rot;
     private float scale = 1;
     private final Matrix m = new Matrix(), inv = new Matrix(), lm = new Matrix();
+    private final Matrix base = new Matrix(), user = new Matrix();   // fit-to-view, then the user's zoom/pan
+    private final android.view.ScaleGestureDetector sgd;
+    private final android.view.GestureDetector gd;
+    private boolean pinching, panning;
+    private ValueAnimator zoomAnim;
     private final RectF imgRect = new RectF();
     private int active = -1;                  // 0..3 corner, 4..7 side
     private float grabDx, grabDy, lastX, lastY, downX, downY;
@@ -69,6 +77,111 @@ public final class CropView extends View {
         cross.setStyle(Paint.Style.STROKE); cross.setStrokeWidth(1.2f * dp); cross.setColor(Ui.ACCENT);
         ghost.setStyle(Paint.Style.STROKE); ghost.setStrokeWidth(2 * dp); ghost.setColor(Ui.LIGHT);
         pill.setStrokeCap(Paint.Cap.ROUND); pill.setStrokeWidth(6 * dp); pill.setColor(Ui.ACCENT);
+        sgd = new android.view.ScaleGestureDetector(c, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            float fx, fy;
+
+            @Override
+            public boolean onScaleBegin(android.view.ScaleGestureDetector d) {
+                fx = d.getFocusX(); fy = d.getFocusY();
+                return true;
+            }
+
+            @Override
+            public boolean onScale(android.view.ScaleGestureDetector d) {
+                float cur = userScale();
+                float target = Math.max(1f, Math.min(8f, cur * d.getScaleFactor()));
+                user.postScale(target / cur, target / cur, d.getFocusX(), d.getFocusY());
+                user.postTranslate(d.getFocusX() - fx, d.getFocusY() - fy);   // two-finger pan
+                fx = d.getFocusX(); fy = d.getFocusY();
+                clampUser(user);
+                updateMatrix();
+                return true;
+            }
+        });
+        gd = new android.view.GestureDetector(c, new android.view.GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (bmp == null || pick(e.getX(), e.getY()) >= 0) return false;
+                Matrix t = new Matrix();
+                if (userScale() < 1.05f) {
+                    t.set(user);
+                    float f = 2.5f / userScale();
+                    t.postScale(f, f, e.getX(), e.getY());
+                    clampUser(t);
+                }
+                animateUser(t);   // double-tap: zoom in there, or back to fit
+                return true;
+            }
+        });
+    }
+
+    private float userScale() {
+        float[] v = new float[9];
+        user.getValues(v);
+        return v[Matrix.MSCALE_X];
+    }
+
+    public boolean isZoomed() { return userScale() > 1.02f; }
+
+    private void updateMatrix() {
+        m.set(base);
+        m.postConcat(user);
+        m.invert(inv);
+        if (bmp != null) {
+            imgRect.set(0, 0, bmp.getWidth(), bmp.getHeight());
+            m.mapRect(imgRect);
+        }
+        invalidate();
+    }
+
+    /** Keeps the zoomed picture covering the view (or centred when smaller). */
+    private void clampUser(Matrix u) {
+        if (bmp == null) return;
+        Matrix t = new Matrix(base);
+        t.postConcat(u);
+        RectF r = new RectF(0, 0, bmp.getWidth(), bmp.getHeight());
+        t.mapRect(r);
+        float w = getWidth(), h = getHeight(), dx = 0, dy = 0;
+        if (r.width() <= w) dx = (w - r.width()) / 2f - r.left;
+        else if (r.left > 0) dx = -r.left;
+        else if (r.right < w) dx = w - r.right;
+        if (r.height() <= h) dy = (h - r.height()) / 2f - r.top;
+        else if (r.top > 0) dy = -r.top;
+        else if (r.bottom < h) dy = h - r.bottom;
+        u.postTranslate(dx, dy);
+    }
+
+    private void animateUser(Matrix target) {
+        if (zoomAnim != null) zoomAnim.cancel();
+        final float[] from = new float[9], to = new float[9];
+        user.getValues(from);
+        target.getValues(to);
+        zoomAnim = ValueAnimator.ofFloat(0, 1);
+        zoomAnim.setDuration(240);
+        zoomAnim.setInterpolator(new DecelerateInterpolator(1.6f));
+        zoomAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator va) {
+                float t = (Float) va.getAnimatedValue();
+                float[] v = new float[9];
+                for (int i = 0; i < 9; i++) v[i] = from[i] + (to[i] - from[i]) * t;
+                user.setValues(v);
+                updateMatrix();
+            }
+        });
+        zoomAnim.start();
+    }
+
+    /** Stops any one-finger action when a second finger lands. */
+    private void cancelSingleFinger() {
+        if (active >= 0) { active = -1; snapPreview = null; notifyChanged(); }
+        if (swiping) {
+            if (swActive && swipe != null) swipe.onSwipeRelease(0, 0);
+            swiping = false;
+            swActive = false;
+        }
+        panning = false;
+        invalidate();
     }
 
     public void setListener(Listener l) { listener = l; }
@@ -139,15 +252,14 @@ public final class CropView extends View {
         float rw = (rot & 1) == 1 ? bh : bw, rh = (rot & 1) == 1 ? bw : bh;
         float pad = 26 * dp;
         scale = Math.min((getWidth() - 2 * pad) / rw, (getHeight() - 2 * pad) / rh);
-        m.reset();
-        m.postTranslate(-bw / 2f, -bh / 2f);
-        m.postRotate(90 * rot);
-        m.postScale(scale, scale);
-        m.postTranslate(getWidth() / 2f, getHeight() / 2f);
-        m.invert(inv);
-        imgRect.set(0, 0, bw, bh);
-        m.mapRect(imgRect);
-        invalidate();
+        base.reset();
+        base.postTranslate(-bw / 2f, -bh / 2f);
+        base.postRotate(90 * rot);
+        base.postScale(scale, scale);
+        base.postTranslate(getWidth() / 2f, getHeight() / 2f);
+        if (zoomAnim != null) zoomAnim.cancel();
+        user.reset();
+        updateMatrix();
     }
 
     // ------------------------------------------------------------------ drawing
@@ -243,11 +355,29 @@ public final class CropView extends View {
     public boolean onTouchEvent(MotionEvent e) {
         if (bmp == null) return false;
         float x = e.getX(), y = e.getY();
-        switch (e.getActionMasked()) {
+        sgd.onTouchEvent(e);
+        gd.onTouchEvent(e);
+        int act = e.getActionMasked();
+        if (e.getPointerCount() > 1 || sgd.isInProgress()) {
+            // two fingers: zoom and pan the picture
+            if (!pinching) { pinching = true; cancelSingleFinger(); getParent().requestDisallowInterceptTouchEvent(true); }
+            return true;
+        }
+        if (pinching) {
+            if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) pinching = false;
+            return true;
+        }
+        switch (act) {
             case MotionEvent.ACTION_DOWN: {
                 m.mapPoints(vq, q);
                 active = pick(x, y);
                 lastX = x; lastY = y;
+                if (active < 0 && isZoomed()) {
+                    panning = true;   // zoomed in: one finger moves the picture
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                }
+                if (active >= 0 && listener != null) listener.onEditStart();
                 if (active < 0) {
                     swiping = true;
                     swActive = false;
@@ -265,6 +395,13 @@ public final class CropView extends View {
                 return true;
             }
             case MotionEvent.ACTION_MOVE: {
+                if (panning) {
+                    user.postTranslate(x - lastX, y - lastY);
+                    clampUser(user);
+                    updateMatrix();
+                    lastX = x; lastY = y;
+                    return true;
+                }
                 if (swiping) {
                     trackRaw(e);
                     float dx = e.getRawX() - downX, dy = e.getRawY() - downY;
@@ -302,6 +439,7 @@ public final class CropView extends View {
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL: {
+                if (panning) { panning = false; return true; }
                 if (swiping) {
                     swiping = false;
                     trackRaw(e);

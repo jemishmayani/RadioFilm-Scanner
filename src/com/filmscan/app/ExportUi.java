@@ -93,6 +93,7 @@ public final class ExportUi {
         final int[] format = {preferred >= 0 ? preferred : prefs.format()};
         final boolean[] split = {prefs.splitGrid()};
         final Dialog[] holder = new Dialog[1];
+        final Runnable[] estimateHook = new Runnable[1];
 
         LinearLayout c = new LinearLayout(a);
         c.setOrientation(LinearLayout.VERTICAL);
@@ -119,12 +120,13 @@ public final class ExportUi {
                 public void onClick(View v) {
                     format[0] = f;
                     for (LinearLayout tv : tileViews) styleTile(a, tv, (Integer) tv.getTag() == format[0], true);
+                    if (estimateHook[0] != null) estimateHook[0].run();
                 }
             });
         }
         final LinearLayout splitTile = tile(a, R.drawable.ic_split, "Panels", "Save each panel separately");
         splitTile.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { split[0] = !split[0]; styleTile(a, splitTile, split[0], true); }
+            @Override public void onClick(View v) { split[0] = !split[0]; styleTile(a, splitTile, split[0], true); if (estimateHook[0] != null) estimateHook[0].run(); }
         });
         for (LinearLayout tv : tileViews) styleTile(a, tv, (Integer) tv.getTag() == format[0], false);
         styleTile(a, splitTile, split[0], false);
@@ -164,6 +166,59 @@ public final class ExportUi {
                 }
             });
         }
+
+        // estimated size and free space
+        final LinearLayout est = new LinearLayout(a);
+        est.setGravity(Gravity.CENTER_VERTICAL);
+        final ImageView estIcon = new ImageView(a);
+        estIcon.setImageDrawable(Ui.icon(a, R.drawable.ic_storage, Ui.MUTED));
+        est.addView(estIcon, new LinearLayout.LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)));
+        final TextView estText = Ui.text(a, "", 12.5f, Ui.MUTED, false);
+        estText.setPadding(Ui.dp(a, 8), 0, 0, 0);
+        est.addView(estText, Ui.weight(1));
+        LinearLayout.LayoutParams el = new LinearLayout.LayoutParams(-1, -2);
+        el.topMargin = Ui.dp(a, 14);
+        c.addView(est, el);
+        // where the files will be saved (not shown when only sharing)
+        LinearLayout where = new LinearLayout(a);
+        where.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView whereIcon = new ImageView(a);
+        whereIcon.setImageDrawable(Ui.icon(a, R.drawable.ic_saved, Ui.MUTED));
+        where.addView(whereIcon, new LinearLayout.LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)));
+        final TextView whereText = Ui.text(a, "", 12.5f, Ui.MUTED, false);
+        whereText.setPadding(Ui.dp(a, 8), 0, 0, 0);
+        where.addView(whereText, Ui.weight(1));
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, -2);
+        wl.topMargin = Ui.dp(a, 6);
+        c.addView(where, wl);
+        if (shareOnly) where.setVisibility(View.GONE);
+        final List<Page> pageList = pages;
+        final Runnable updateEstimate = new Runnable() {
+            @Override
+            public void run() {
+                long need = Storage.estimate(a, pageList, format[0]);
+                long free = Storage.freeBytes();
+                int files = Storage.fileCount(pageList, format[0], hasGrid && split[0]);
+                String base = "\u2248 " + Storage.human(need) + " \u00b7 " + (files == 1 ? "1 file" : files + " files");
+                int color = Ui.MUTED;
+                if (free >= 0 && need > free - 50L * 1024 * 1024) {
+                    base = "Not enough space: needs \u2248 " + Storage.human(need) + ", " + Storage.human(free) + " free";
+                    color = Ui.DANGER;
+                } else if (free >= 0 && free - need < 500L * 1024 * 1024) {
+                    base += " \u00b7 storage almost full (" + Storage.human(free) + " free)";
+                    color = Ui.ACCENT;
+                } else if (free >= 0) {
+                    base += " \u00b7 " + Storage.human(free) + " free";
+                }
+                estText.setText(base);
+                estText.setTextColor(color);
+                estIcon.getDrawable().setTint(color);
+                whereText.setText(format[0] == Exporter.PDF ? "Saves to Download/" + Exporter.folder()
+                        : "Saves to Pictures/" + Exporter.folder() + " (Gallery)");
+            }
+        };
+        updateEstimate.run();
+        estimateHook[0] = updateEstimate;
 
         // actions: Share (round) + Save (wide), or just Share
         LinearLayout actions = new LinearLayout(a);
@@ -294,7 +349,7 @@ public final class ExportUi {
         for (Page p : source) pages.add(p.copy());
         // keep the screen from turning mid-export, so the result always reaches this screen
         a.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED);
-        final AlertDialog dlg = CameraActivity.progressDialog(a, "Rendering at full resolution…");
+        final AlertDialog dlg = CameraActivity.progressDialog(a, "Preparing full-resolution pages…");
         final TextView msg = (TextView) dlg.findViewById(android.R.id.message);
         app.export.execute(new Runnable() {
             @Override
@@ -303,7 +358,7 @@ public final class ExportUi {
                     @Override
                     public void step(final int d, final int total) {
                         app.ui(new Runnable() {
-                            @Override public void run() { if (msg != null) msg.setText("Rendering at full resolution… " + d + " of " + total); }
+                            @Override public void run() { CameraActivity.setProgress(dlg, "Saving at full resolution… " + d + " of " + total, d, total); }
                         });
                     }
                 });

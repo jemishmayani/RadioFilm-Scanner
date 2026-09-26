@@ -64,6 +64,14 @@ public final class EditActivity extends BaseActivity {
     private int loadGen, thumbGen;
     private boolean baseStale, procBusy, procPending, switching, detectBusy;
     private String cropHint = "";
+    // undo / redo history per page (kept while the editor is open)
+    private final java.util.Map<String, java.util.ArrayDeque<Page>> undoStacks = new java.util.HashMap<String, java.util.ArrayDeque<Page>>();
+    private final java.util.Map<String, java.util.ArrayDeque<Page>> redoStacks = new java.util.HashMap<String, java.util.ArrayDeque<Page>>();
+    private ImageView undoBtn, redoBtn;
+    private Bitmap filtered;          // current page with its filter, before anonymising
+    private int redactGen;
+    private static int redactType = com.filmscan.core.Redact.BOX;
+    private final List<LinearLayout> typeChips = new ArrayList<LinearLayout>();
     private PageSwiper swiper;
     private float[] beforeFull;
 
@@ -132,10 +140,19 @@ public final class EditActivity extends BaseActivity {
         top.addView(done, dlp);
         col.addView(top, new LinearLayout.LayoutParams(-1, -2));
 
+        LinearLayout hintRow = new LinearLayout(this);
+        hintRow.setGravity(Gravity.CENTER_VERTICAL);
+        hintRow.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 6), 0);
         hintTv = Ui.text(this, "", 13, Ui.MUTED, false);
-        hintTv.setGravity(Gravity.CENTER);
-        hintTv.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 6));
-        col.addView(hintTv, new LinearLayout.LayoutParams(-1, -2));
+        hintTv.setMaxLines(2);
+        hintRow.addView(hintTv, Ui.weight(1));
+        undoBtn = Ui.iconButton(this, R.drawable.ic_undo, "Undo");
+        redoBtn = Ui.iconButton(this, R.drawable.ic_redo, "Redo");
+        hintRow.addView(undoBtn, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
+        hintRow.addView(redoBtn, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 40)));
+        col.addView(hintRow, new LinearLayout.LayoutParams(-1, -2));
+        undoBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { undo(); } });
+        redoBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { redo(); } });
 
         stage = new FrameLayout(this);
         cropView = new CropView(this);
@@ -179,12 +196,13 @@ public final class EditActivity extends BaseActivity {
         toolAdjust = Ui.tool(this, R.drawable.ic_tune, "Adjust");
         LinearLayout tRot = Ui.tool(this, R.drawable.ic_rotate, "Rotate");
         toolGrid = Ui.tool(this, R.drawable.ic_split, "Split");
-        toolHide = Ui.tool(this, R.drawable.ic_hide, "Hide info");
+        toolHide = Ui.tool(this, R.drawable.ic_hide, "Anonymise");
         for (LinearLayout t : new LinearLayout[]{toolCrop, toolFilter, toolAdjust, tRot, toolGrid, toolHide}) tools.addView(t, Ui.weight(1));
         col.addView(tools, new LinearLayout.LayoutParams(-1, -2));
         setContentView(col);
 
-        back.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { onBackPressed(); } });
+        back.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { goBack(); } });
+        setBackHandler(new Runnable() { @Override public void run() { goBack(); } });
         done.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { save(); } });
         arrangeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -220,6 +238,10 @@ public final class EditActivity extends BaseActivity {
             }
         });
         cropView.setSwipeListener(swiper.gesture);
+        cropView.setListener(new CropView.Listener() {
+            @Override public void onQuadChanged(boolean valid) { }
+            @Override public void onEditStart() { snapshot(); }
+        });
         zoomView.setSwipeListener(swiper.gesture);
     }
 
@@ -229,15 +251,27 @@ public final class EditActivity extends BaseActivity {
         LinearLayout detect = Ui.tool(this, R.drawable.ic_auto, "Detect edges");
         LinearLayout full = Ui.tool(this, R.drawable.ic_full, "Whole photo");
         toolSnap = Ui.tool(this, R.drawable.ic_magnet, "Edge snap");
+        LinearLayout resetCrop = Ui.tool(this, R.drawable.ic_restore, "Reset");
         p.addView(detect, Ui.weight(1));
         p.addView(full, Ui.weight(1));
         p.addView(toolSnap, Ui.weight(1));
+        p.addView(resetCrop, Ui.weight(1));
+        resetCrop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // back to the automatic crop and no rotation
+                snapshot();
+                if (page.rot != 0) rotateBy((4 - page.rot) & 3);
+                redetect(false);
+            }
+        });
         Ui.setToolActive(toolSnap, app.prefs().snap());
-        detect.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { redetect(); } });
+        detect.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { redetect(true); } });
         full.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (!cropView.hasImage()) return;
+                snapshot();
                 if (cropView.isFull() && beforeFull != null) cropView.setQuadNormalized(beforeFull, true);
                 else { beforeFull = cropView.getQuadNormalized(); cropView.setQuadNormalized(Geom.fullQuad(1, 1), true); }
             }
@@ -272,6 +306,11 @@ public final class EditActivity extends BaseActivity {
         head.setPadding(Ui.dp(this, 16), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 2));
         filterName = Ui.text(this, "", 14, Ui.LIGHT, true);
         head.addView(filterName, Ui.weight(1));
+        TextView resetFilter = textAction("Reset", Ui.LIGHT);
+        head.addView(resetFilter);
+        resetFilter.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { setFilter(Filters.ORIGINAL); }
+        });
         applyFilterAll = applyAllButton();
         head.addView(applyFilterAll);
         p.addView(head);
@@ -335,6 +374,7 @@ public final class EditActivity extends BaseActivity {
         reset.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                snapshot();
                 page.bright = 0; page.contrast = 0; page.sharp = 0;
                 edited();
                 syncSliders();
@@ -364,7 +404,7 @@ public final class EditActivity extends BaseActivity {
                 readSliders();
                 reprocess();
             }
-            @Override public void onStartTrackingTouch(SeekBar s) { }
+            @Override public void onStartTrackingTouch(SeekBar s) { snapshot(); }
             @Override public void onStopTrackingTouch(SeekBar s) { edited(); }
         });
         return sb;
@@ -373,32 +413,53 @@ public final class EditActivity extends BaseActivity {
     private LinearLayout buildRedactPanel() {
         LinearLayout p = new LinearLayout(this);
         p.setOrientation(LinearLayout.VERTICAL);
-        p.setPadding(Ui.dp(this, 16), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 8));
-        p.addView(Ui.text(this, "Drag over the patient name, ID or date of birth to cover it with a black box before sharing.", 13.5f, Ui.MUTED, false));
+        p.setPadding(Ui.dp(this, 16), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 6));
+        p.addView(Ui.text(this, "Drag over names, IDs or dates. Black box is the safest choice for text.", 13, Ui.MUTED, false));
+        LinearLayout types = new LinearLayout(this);
+        types.setPadding(0, Ui.dp(this, 8), 0, 0);
+        int[] icons = {R.drawable.ic_box, R.drawable.ic_blur, R.drawable.ic_pixelate};
+        String[] names = {"Black box", "Blur", "Pixelate"};
+        int[] kinds = {com.filmscan.core.Redact.BOX, com.filmscan.core.Redact.BLUR, com.filmscan.core.Redact.PIXELATE};
+        for (int i = 0; i < 3; i++) {
+            final int kind = kinds[i];
+            LinearLayout t = Ui.tool(this, icons[i], names[i]);
+            t.setTag(kind);
+            types.addView(t, Ui.weight(1));
+            typeChips.add(t);
+            t.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { redactType = kind; styleTypes(); }
+            });
+        }
+        p.addView(types, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.END);
-        row.setPadding(0, Ui.dp(this, 6), 0, 0);
-        TextView undo = textAction("Undo box", Ui.LIGHT);
         TextView clear = textAction("Remove all", Ui.LIGHT);
         TextView done = textAction("Finish", Ui.ACCENT);
-        row.addView(undo);
         row.addView(clear);
         row.addView(done);
         p.addView(row);
-        undo.setOnClickListener(new View.OnClickListener() {
+        clear.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (page.redact.isEmpty()) return;
-                page.redact.remove(page.redact.size() - 1);
+                snapshot();
+                page.redact.clear();
                 edited();
                 zoomView.invalidate();
+                displayPreview();
             }
         });
-        clear.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { page.redact.clear(); edited(); zoomView.invalidate(); }
-        });
         done.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMode(MODE_FILTER); } });
+        styleTypes();
         return p;
+    }
+
+    private void styleTypes() {
+        for (LinearLayout t : typeChips) {
+            boolean on = (Integer) t.getTag() == redactType;
+            Ui.setToolActive(t, on);
+            t.setBackground(on ? Ui.round(Ui.accentA(0x22), Ui.dp(this, 12)) : Ui.ripple(null, false));
+        }
     }
 
     private TextView textAction(String s, int color) {
@@ -434,8 +495,10 @@ public final class EditActivity extends BaseActivity {
         zoomView.setRedactMode(m == MODE_REDACT, m == MODE_REDACT ? new ZoomImageView.RedactListener() {
             @Override
             public void onBoxDrawn(float[] box) {
-                page.redact.add(box);
+                snapshot();
+                page.redact.add(new float[]{box[0], box[1], box[2], box[3], redactType});
                 edited();
+                displayPreview();
             }
         } : null);
         updateHint();
@@ -468,7 +531,6 @@ public final class EditActivity extends BaseActivity {
         else if (mode == MODE_REDACT) s = "";
         else s = many ? "Pinch to zoom. Swipe to change page." : "Pinch or double-tap to zoom.";
         hintTv.setText(s);
-        Ui.setVisible(hintTv, s.length() > 0);
     }
 
     /** Stores the crop handles into the page. Returns false if the shape is invalid and the user was told. */
@@ -494,6 +556,8 @@ public final class EditActivity extends BaseActivity {
     // ================================================================== page binding
 
     private void bindPage() {
+        filtered = null;
+        redactGen++;
         int idx = session.indexOf(page), n = session.pages.size();
         SavedStore.Entry editing = app.editingEntry();
         titleTv.setText(editing != null ? editing.name : n > 1 ? "Page " + (idx + 1) + " of " + n : "Scan");
@@ -516,6 +580,7 @@ public final class EditActivity extends BaseActivity {
         for (ImageView iv : chipImages) iv.setImageDrawable(null);
         cropHint = "";
         updateHint();
+        updateUndoUi();
         load();
     }
 
@@ -617,6 +682,7 @@ public final class EditActivity extends BaseActivity {
 
     private void setFilter(int f) {
         if (f == page.filter) return;
+        snapshot();
         page.filter = f;
         edited();
         syncFilterUi();
@@ -629,6 +695,9 @@ public final class EditActivity extends BaseActivity {
 
     private void applyFilterToAll() {
         for (Page p : session.pages) {
+            if (p != page) { stack(undoStacks, p.id).push(p.copy()); stack(redoStacks, p.id).clear(); }
+        }
+        for (Page p : session.pages) {
             if (p != page && p.filter != page.filter) { p.filter = page.filter; p.version++; }
         }
         session.save();
@@ -637,6 +706,9 @@ public final class EditActivity extends BaseActivity {
     }
 
     private void applyAdjustToAll() {
+        for (Page p : session.pages) {
+            if (p != page) { stack(undoStacks, p.id).push(p.copy()); stack(redoStacks, p.id).clear(); }
+        }
         for (Page p : session.pages) {
             if (p == page) continue;
             p.bright = page.bright; p.contrast = page.contrast; p.sharp = page.sharp;
@@ -720,13 +792,8 @@ public final class EditActivity extends BaseActivity {
                     public void run() {
                         procBusy = false;
                         if (out != null && g == loadGen && !isFinishing()) {
-                            spinner.setVisibility(View.GONE);
-                            boolean firstImage = zoomView.getBitmap() == null;
-                            zoomView.setBitmap(out, true);
-                            if (firstImage && mode != MODE_CROP) {
-                                zoomView.setAlpha(0f);
-                                zoomView.animate().alpha(1f).setStartDelay(0).setDuration(200).start();
-                            }
+                            filtered = out;
+                            displayPreview();
                         }
                         if (procPending) { procPending = false; reprocess(); }
                     }
@@ -735,9 +802,131 @@ public final class EditActivity extends BaseActivity {
         });
     }
 
+    /** Shows the filtered page with its anonymised areas applied (done on a copy, off the UI thread). */
+    private void displayPreview() {
+        final Bitmap f = filtered;
+        if (f == null) return;
+        if (page.redact.isEmpty()) { setPreviewBitmap(f); return; }
+        final int g = ++redactGen, lg = loadGen;
+        final Page snap = page.copy();
+        app.run(new Runnable() {
+            @Override
+            public void run() {
+                Bitmap b;
+                try {
+                    b = f.copy(Bitmap.Config.ARGB_8888, true);
+                    Imaging.drawRedactions(b, snap);
+                } catch (Throwable t) {
+                    b = null;
+                }
+                final Bitmap out = b;
+                app.ui(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (out != null && g == redactGen && lg == loadGen && !isFinishing()) setPreviewBitmap(out);
+                    }
+                });
+            }
+        });
+    }
+
+    private void setPreviewBitmap(Bitmap b) {
+        spinner.setVisibility(View.GONE);
+        boolean firstImage = zoomView.getBitmap() == null;
+        zoomView.setBitmap(b, true);
+        if (firstImage && mode != MODE_CROP) {
+            zoomView.setAlpha(0f);
+            zoomView.animate().alpha(1f).setStartDelay(0).setDuration(200).start();
+        }
+    }
+
+    // ================================================================== undo / redo
+
+    private java.util.ArrayDeque<Page> stack(java.util.Map<String, java.util.ArrayDeque<Page>> m, String id) {
+        java.util.ArrayDeque<Page> d = m.get(id);
+        if (d == null) { d = new java.util.ArrayDeque<Page>(); m.put(id, d); }
+        return d;
+    }
+
+    /** The page as it is right now, including crop handles that are not yet committed. */
+    private Page current() {
+        Page c = page.copy();
+        if (mode == MODE_CROP && cropView.hasImage() && cropView.isValid()) c.quad = cropView.getQuadNormalized();
+        return c;
+    }
+
+    /** Records the current state before a change. */
+    private void snapshot() {
+        if (page == null) return;
+        Page c = current();
+        java.util.ArrayDeque<Page> u = stack(undoStacks, page.id);
+        if (!u.isEmpty() && EditHistory.sameEdits(u.peek(), c)) return;
+        u.push(c);
+        while (u.size() > 60) u.removeLast();
+        stack(redoStacks, page.id).clear();
+        updateUndoUi();
+    }
+
+    private void undo() { step(undoStacks, redoStacks); }
+
+    private void redo() { step(redoStacks, undoStacks); }
+
+    private void step(java.util.Map<String, java.util.ArrayDeque<Page>> from, java.util.Map<String, java.util.ArrayDeque<Page>> to) {
+        java.util.ArrayDeque<Page> src = stack(from, page.id);
+        Page now = current();
+        while (!src.isEmpty() && EditHistory.sameEdits(src.peek(), now)) src.pop();   // skip no-op entries
+        if (src.isEmpty()) { updateUndoUi(); return; }
+        stack(to, page.id).push(now);
+        restore(src.pop());
+    }
+
+    /** Puts a recorded state back on screen. */
+    private void restore(Page s) {
+        boolean geometry = page.rot != s.rot || !EditHistory.sameQuad(current().quad, s.quad);
+        EditHistory.apply(s, page);
+        page.version++;
+        session.save();
+        stripSoon();
+        syncSliders();
+        syncFilterUi();
+        zoomView.setGrid(page.gridR, page.gridC);
+        zoomView.setBoxes(page.redact);
+        Ui.setToolActive(toolGrid, page.hasGrid());
+        if (geometry) {
+            cropView.setRotationSteps(page.rot);
+            cropView.setQuadNormalized(page.quad, true);
+            baseStale = true;
+            if (mode != MODE_CROP) rebuildBase();
+        } else {
+            reprocess();
+        }
+        updateUndoUi();
+    }
+
+    private void updateUndoUi() {
+        if (undoBtn == null || page == null) return;
+        boolean u = !stack(undoStacks, page.id).isEmpty(), r = !stack(redoStacks, page.id).isEmpty();
+        undoBtn.setEnabled(u);
+        redoBtn.setEnabled(r);
+        undoBtn.animate().alpha(u ? 1f : 0.3f).setStartDelay(0).setDuration(150).start();
+        redoBtn.animate().alpha(r ? 1f : 0.3f).setStartDelay(0).setDuration(150).start();
+    }
+
+    /** Clears every edit on the current page, back to the original photo with automatic edges. */
+    private void resetPage() {
+        if (mode == MODE_CROP) commitCrop(false);
+        snapshot();
+        EditHistory.clearEdits(page);
+        page.version++;
+        session.save();
+        stripSoon();
+        bindPage();
+        Toast.makeText(this, "Page reset to the original photo. Undo brings your edits back.", Toast.LENGTH_SHORT).show();
+    }
+
     // ================================================================== actions
 
-    private void redetect() {
+    private void redetect(final boolean record) {
         if (detectBusy || upright == null) return;
         detectBusy = true;
         spinner.setVisibility(View.VISIBLE);
@@ -756,6 +945,7 @@ public final class EditActivity extends BaseActivity {
                         spinner.setVisibility(View.GONE);
                         if (g != loadGen) return;
                         if (fq != null) {
+                            if (record) snapshot();
                             cropView.setQuadNormalized(fq, true);
                             cropHint = "Edges found. Drag a corner or edge to adjust.";
                         } else {
@@ -769,15 +959,23 @@ public final class EditActivity extends BaseActivity {
     }
 
     private void rotate() {
-        page.rot = (page.rot + 1) & 3;
-        // keep boxes over the same content: (x,y) -> (1-y, x)
-        for (float[] r : page.redact) {
-            float l = r[0], t = r[1], rr = r[2], b = r[3];
-            r[0] = 1 - b; r[1] = l; r[2] = 1 - t; r[3] = rr;
+        snapshot();
+        rotateBy(1);
+    }
+
+    /** Turns the page clockwise by quarter turns, keeping anonymised areas and the grid on the same content. */
+    private void rotateBy(int steps) {
+        for (int k = 0; k < (steps & 3); k++) {
+            page.rot = (page.rot + 1) & 3;
+            // (x,y) -> (1-y, x)
+            for (float[] r : page.redact) {
+                float l = r[0], t = r[1], rr = r[2], b = r[3];
+                r[0] = 1 - b; r[1] = l; r[2] = 1 - t; r[3] = rr;
+            }
+            int gr = page.gridR;
+            page.gridR = page.gridC;
+            page.gridC = gr;
         }
-        int gr = page.gridR;
-        page.gridR = page.gridC;
-        page.gridC = gr;
         zoomView.setGrid(page.gridR, page.gridC);
         edited();
         cropView.setRotationSteps(page.rot);
@@ -814,6 +1012,7 @@ public final class EditActivity extends BaseActivity {
                 .setPositiveButton("Apply", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
+                        snapshot();
                         page.gridR = rows.getValue(); page.gridC = cols.getValue();
                         edited();
                         zoomView.setGrid(page.gridR, page.gridC);
@@ -823,6 +1022,7 @@ public final class EditActivity extends BaseActivity {
                 .setNeutralButton("No split", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
+                        snapshot();
                         page.gridR = 1; page.gridC = 1;
                         edited();
                         zoomView.setGrid(1, 1);
@@ -1008,7 +1208,7 @@ public final class EditActivity extends BaseActivity {
         if (p == null) return;
         new AlertDialog.Builder(this)
                 .setTitle("Page " + (session.indexOf(p) + 1))
-                .setItems(new String[]{"Duplicate to crop another area", "Delete"}, new DialogInterface.OnClickListener() {
+                .setItems(new String[]{"Duplicate to crop another area", "Reset all edits", "Delete"}, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int which) {
                         if (mode == MODE_CROP) commitCrop(false);
@@ -1021,6 +1221,9 @@ public final class EditActivity extends BaseActivity {
                             page = c;
                             bindPage();
                             if (mode != MODE_CROP) setMode(MODE_CROP);
+                        } else if (which == 1) {
+                            if (p != page) { page = p; bindPage(); }
+                            resetPage();
                         } else {
                             page = p;
                             confirmDelete();
@@ -1074,12 +1277,13 @@ public final class EditActivity extends BaseActivity {
                 if (!stored[0]) return;
                 if (editing != null) {
                     app.endEdit();
-                    Toast.makeText(EditActivity.this, "Updated \u201c" + clean + "\u201d", Toast.LENGTH_LONG).show();
+                    Toast.makeText(EditActivity.this, "Updated \u201c" + clean + "\u201d in " + r.where, Toast.LENGTH_LONG).show();
                     startActivity(new Intent(EditActivity.this, SavedActivity.class)
                             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
                 } else {
                     session.clear();
-                    startActivity(CameraActivity.intent(EditActivity.this).putExtra(CameraActivity.EXTRA_SAVED, clean));
+                    startActivity(CameraActivity.intent(EditActivity.this).putExtra(CameraActivity.EXTRA_SAVED, clean)
+                            .putExtra(CameraActivity.EXTRA_WHERE, r.where));
                 }
                 finish();
             }
@@ -1129,8 +1333,8 @@ public final class EditActivity extends BaseActivity {
         finish();
     }
 
-    @Override
-    public void onBackPressed() {
+    /** Back: keep the crop, then leave (closing a saved scan's workspace if one is open). */
+    private void goBack() {
         if (mode == MODE_CROP) commitCrop(false);
         leave();
     }

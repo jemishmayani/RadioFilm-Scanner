@@ -111,6 +111,7 @@ public final class SettingsBackup {
         }
         ed.commit();
         Ui.applyAccent(App.get().prefs().accent());
+        Branding.syncLauncher(App.get());
         return count;
     }
 }

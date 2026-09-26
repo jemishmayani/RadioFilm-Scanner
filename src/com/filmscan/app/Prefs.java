@@ -105,4 +105,8 @@ public final class Prefs {
     /** Extra viewfinder turn in quarter turns (0 = automatic), for devices that report odd camera data. */
     public int previewFix() { return sp.getInt("previewFix", 0); }
     public void previewFix(int v) { sp.edit().putInt("previewFix", v).apply(); }
+
+    /** App identity: 0 = RadioFilm Scanner, 1 = DocScanner (name, icon and save folders). */
+    public int identity() { return sp.getInt("identity", 0); }
+    public void identity(int v) { sp.edit().putInt("identity", v).apply(); }
 }

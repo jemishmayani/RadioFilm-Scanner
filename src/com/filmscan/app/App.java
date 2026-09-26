@@ -91,6 +91,9 @@ public final class App extends Application {
 
     private Runnable savedListener;
 
+    /** Set once the start-up check for an unfinished scan has run in this process. */
+    public boolean recoveryChecked;
+
     /** The Saved scans screen listens so covers refresh as soon as they are re-rendered. */
     public void setSavedListener(Runnable r) { savedListener = r; }
 

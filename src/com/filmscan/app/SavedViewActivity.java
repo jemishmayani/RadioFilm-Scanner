@@ -158,7 +158,8 @@ public final class SavedViewActivity extends BaseActivity {
         Ui.setVisible(nextBtn, n > 1);
         prevBtn.setAlpha(i > 0 ? 1f : 0.3f);
         nextBtn.setAlpha(i < n - 1 ? 1f : 0.3f);
-        metaTv.setText((n > 1 ? "Page " + (i + 1) + " of " + n + " · " : "") + SavedActivity.meta(entry).replaceFirst("^\\d+ pages? · ", ""));
+        metaTv.setText((n > 1 ? "Page " + (i + 1) + " of " + n + " · " : "") + SavedActivity.meta(entry).replaceFirst("^\\d+ pages? · ", "")
+                + (entry.where != null && entry.where.length() > 0 ? "\nFiles in " + entry.where : ""));
         final Page p = pages.get(i);
         view.setGrid(1, 1);
         final String key = p.renderKey() + "@saved";

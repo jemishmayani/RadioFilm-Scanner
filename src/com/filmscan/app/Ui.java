@@ -164,6 +164,7 @@ public final class Ui {
     }
 
     public static void setToolActive(LinearLayout tool, boolean active) {
+        tool.setBackground(active ? ripple(round(accentA(0x1F), dp(tool.getContext(), 12)), true) : ripple(null, false));
         ImageView iv = (ImageView) tool.getChildAt(0);
         TextView t = (TextView) tool.getChildAt(1);
         iv.getDrawable().setTint(active ? ACCENT : LIGHT);
