@@ -3,6 +3,13 @@
 All notable changes to RadioFilm Scanner. Newest first.
 Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown in brackets.
 
+## [Unreleased]
+<!-- Add changes here as you make them; move them under a new version when you release. -->
+
+## [1.9.0] (10) - 2026-09-28
+### Removed
+- Monitor Mode (added in 1.8.0). It did not reliably reduce moiré in real photos of screens, so it has been taken out rather than left in as an unreliable option. Scans that had it turned on open normally without it; all other edits are kept.
+
 ## [1.8.0] (9) - 2026-09-27
 ### Added
 - **Monitor Mode** for photos of a screen: reduces moiré (rainbow ripples) with Off / Low / Medium / High or a custom intensity. It is its own layer, so filters, adjustments, crop, rotate and anonymise all still apply; included in undo, redo, reset and "Apply to all".

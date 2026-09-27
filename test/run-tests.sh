@@ -8,6 +8,6 @@ javac -nowarn -encoding UTF-8 -d "$OUT" src/com/filmscan/core/*.java src/com/fil
 for t in DetectTest SnapTest AspectTest PreviewGeometryTest RedactTest StripRenderTest LayoutGeometryTest SavedQueryTest; do
   echo "== $t"; java -cp "$OUT" "$t" | tail -3
 done
-for t in com.filmscan.core.MoireTest com.filmscan.core.FilterTest; do
+for t in com.filmscan.core.FilterTest; do
   echo "== ${t##*.}"; java -cp "$OUT" "$t" | tail -5
 done

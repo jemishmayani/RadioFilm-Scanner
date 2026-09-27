@@ -4,7 +4,7 @@
 
 Photograph a film on a lightbox (or a report, a prescription, a whiteboard), and the app finds the edges, straightens the perspective, enhances it, and saves a clean full-resolution JPEG, PNG or PDF. No account, no cloud, no ads. The app does not even request internet access.
 
-![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.8.0-orange)
+![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.9.0-orange)
 
 <p align="center">
   <img src="docs/camera.jpg" width="24%" alt="Camera with live edge detection">
@@ -47,7 +47,6 @@ Every feature is available in both. Switch any time in **Settings > Appearance >
 - **11 filters:** No effects, Auto, Pro color, Grayscale, **X-ray enhance**, **X-ray detail**, Negative, High contrast, Brighten, Whiteboard, B&W document. Brightness, contrast and sharpness, with **Apply to all** pages.
 - Rotate, **split multi-slice films into panels** (up to 8 x 8, each saved as its own image), and duplicate a page to crop a second area.
 - **Anonymise** patient details with a **black box**, **blur** or **pixelate** before sharing. Black box is the safest choice for names and IDs.
-- **Monitor Mode** for photos of a screen (PACS monitors, laptops): reduces moiré, the rainbow ripples and fine interference patterns, with Off / Low / Medium / High or a custom intensity. It is its own layer: filters, adjustments, crop, rotate and anonymise all still apply on top, and it can be changed, reset or undone at any time.
 
 ### Save and share
 - **JPEG, PNG (lossless) or multi-page PDF**, always rendered from the full-resolution original, with a progress bar.
@@ -130,7 +129,7 @@ The image-processing core is plain Java and is tested on the desktop:
 ./test/run-tests.sh
 ```
 
-It covers edge detection, corner and edge snapping, aspect-ratio estimation, filters, Monitor Mode (moiré removed, real edges kept), viewfinder orientation maths for phones and tablets, the anonymise effects, PDF page and layout geometry, Saved scans search and date filters (including day, month and year boundaries), and a pixel-by-pixel check that the memory-saving strip renderer matches a single-piece render exactly.
+It covers edge detection, corner and edge snapping, aspect-ratio estimation, filters, viewfinder orientation maths for phones and tablets, the anonymise effects, PDF page and layout geometry, Saved scans search and date filters (including day, month and year boundaries), and a pixel-by-pixel check that the memory-saving strip renderer matches a single-piece render exactly.
 
 ## Project structure
 
@@ -138,7 +137,7 @@ It covers edge detection, corner and edge snapping, aspect-ratio estimation, fil
 AndroidManifest.xml
 build.sh                     build + sign without Gradle
 src/com/filmscan/core/       pure-Java imaging: edge detection, snapping, perspective,
-                             filters, Monitor Mode, anonymise effects, PDF writer
+                             filters, anonymise effects, PDF writer
                              and page/layout geometry (desktop-testable)
 src/com/filmscan/app/        Android app: camera, editor, rearrange, saved scans,
                              settings, name suggestions, export, PDF options,

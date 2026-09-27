@@ -28,7 +28,7 @@ public final class EditHistory {
     public static boolean sameEdits(Page a, Page b) {
         return sameQuad(a.quad, b.quad) && a.rot == b.rot && a.filter == b.filter
                 && a.bright == b.bright && a.contrast == b.contrast && a.sharp == b.sharp
-                && a.gridR == b.gridR && a.gridC == b.gridC && a.moire == b.moire && sameBoxes(a.redact, b.redact);
+                && a.gridR == b.gridR && a.gridC == b.gridC && sameBoxes(a.redact, b.redact);
     }
 
     /** Copies the edit settings of {@code from} into {@code to} (same photo, same id). */
@@ -42,7 +42,6 @@ public final class EditHistory {
         to.sharp = from.sharp;
         to.gridR = from.gridR;
         to.gridC = from.gridC;
-        to.moire = from.moire;
         to.redact.clear();
         for (float[] r : from.redact) to.redact.add(r.clone());
     }
@@ -58,7 +57,6 @@ public final class EditHistory {
         p.sharp = 0;
         p.gridR = 1;
         p.gridC = 1;
-        p.moire = 0;
         p.redact.clear();
     }
 }
