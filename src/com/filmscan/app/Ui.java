@@ -41,7 +41,11 @@ public final class Ui {
             R.style.AppTheme_A4, R.style.AppTheme_A5, R.style.AppTheme_A6, R.style.AppTheme_A7};
     private static final int[] SHEETS = {R.style.SheetTheme_A0, R.style.SheetTheme_A1, R.style.SheetTheme_A2, R.style.SheetTheme_A3,
             R.style.SheetTheme_A4, R.style.SheetTheme_A5, R.style.SheetTheme_A6, R.style.SheetTheme_A7};
+    private static final int[] DIALOGS = {R.style.DialogTheme_A0, R.style.DialogTheme_A1, R.style.DialogTheme_A2, R.style.DialogTheme_A3,
+            R.style.DialogTheme_A4, R.style.DialogTheme_A5, R.style.DialogTheme_A6, R.style.DialogTheme_A7};
     private static int accentIndex;
+
+    public static int dialogTheme() { return DIALOGS[accentIndex]; }
 
     public static int ACCENT = ACCENTS[0];
     public static int ON_ACCENT = 0xFF1C1405;

@@ -18,6 +18,8 @@ public final class Page {
     public int filter = Filters.ORIGINAL;
     public int bright, contrast, sharp;
     public int gridR = 1, gridC = 1;
+    /** Monitor Mode (moiré reduction) strength 0..100; 0 = off. Its own layer, applied before filters. */
+    public int moire;
     public ArrayList<float[]> redact = new ArrayList<float[]>(); // normalized l,t,r,b in final output
     public int version;
 
@@ -36,6 +38,7 @@ public final class Page {
         p.detected = detected; p.rot = rot; p.filter = filter;
         p.bright = bright; p.contrast = contrast; p.sharp = sharp;
         p.gridR = gridR; p.gridC = gridC;
+        p.moire = moire;
         for (float[] r : redact) p.redact.add(r.clone());
         p.version = version;
         return p;
@@ -51,6 +54,7 @@ public final class Page {
         o.put("detected", detected); o.put("rot", rot); o.put("filter", filter);
         o.put("bright", bright); o.put("contrast", contrast); o.put("sharp", sharp);
         o.put("gridR", gridR); o.put("gridC", gridC); o.put("version", version);
+        o.put("moire", moire);
         JSONArray rs = new JSONArray();
         for (float[] r : redact) rs.put(arr(r));
         o.put("redact", rs);
@@ -66,6 +70,7 @@ public final class Page {
         p.bright = o.optInt("bright"); p.contrast = o.optInt("contrast"); p.sharp = o.optInt("sharp");
         p.gridR = Math.max(1, o.optInt("gridR", 1)); p.gridC = Math.max(1, o.optInt("gridC", 1));
         p.version = o.optInt("version");
+        p.moire = Math.max(0, Math.min(100, o.optInt("moire", 0)));
         JSONArray rs = o.optJSONArray("redact");
         if (rs != null) for (int i = 0; i < rs.length(); i++) p.redact.add(floats(rs.getJSONArray(i)));
         return p;

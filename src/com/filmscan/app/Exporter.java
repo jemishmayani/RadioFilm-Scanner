@@ -46,6 +46,10 @@ public final class Exporter {
         Prefs prefs = App.get().prefs();
         int quality = format == PNG ? 100 : prefs.quality();
         long maxPx = Imaging.maxOutputPixels(ctx, prefs.maxMp());
+        // PDF options: page size, margins and file size (only for PDFs; scans are never changed)
+        final int pdfCap = format == PDF ? PdfQuality.maxSide(prefs.pdfQuality()) : 0;
+        if (format == PDF) quality = PdfQuality.jpegQuality(prefs.pdfQuality(), prefs);
+        if (pdfCap > 0) maxPx = Math.min(maxPx, (long) pdfCap * pdfCap);
         String safe = sanitize(baseName);
         File shareDir = new File(ctx.getCacheDir(), "share");
         if (forShare) {
@@ -116,13 +120,21 @@ public final class Exporter {
                         // each page is encoded to a temporary file and streamed into the PDF
                         File tmp = File.createTempFile("pdfpage", ".jpg", ctx.getCacheDir());
                         try {
+                            Bitmap pg = b;
+                            int longSide = Math.max(b.getWidth(), b.getHeight());
+                            if (pdfCap > 0 && longSide > pdfCap) {
+                                float f = pdfCap / (float) longSide;
+                                pg = Bitmap.createScaledBitmap(b, Math.max(1, Math.round(b.getWidth() * f)), Math.max(1, Math.round(b.getHeight() * f)), true);
+                            }
                             OutputStream to = new BufferedOutputStream(new FileOutputStream(tmp), 1 << 16);
                             try {
-                                if (!b.compress(Bitmap.CompressFormat.JPEG, quality, to)) throw new IOException("Could not encode the page");
+                                if (!pg.compress(Bitmap.CompressFormat.JPEG, quality, to)) throw new IOException("Could not encode the page");
                             } finally {
                                 to.close();
                             }
-                            pdf.addJpegPage(tmp, b.getWidth(), b.getHeight(), Filters.isGray(p.filter));
+                            pdf.addJpegPage(tmp, pg.getWidth(), pg.getHeight(),
+                                    com.filmscan.core.PdfPage.layout(prefs.pdfPage(), prefs.pdfMargin(), pg.getWidth(), pg.getHeight()));
+                            if (pg != b) pg.recycle();
                         } finally {
                             tmp.delete();
                         }
@@ -227,6 +239,24 @@ public final class Exporter {
         writeBitmap(b, format, quality, new FileOutputStream(f));
         MediaScannerConnection.scanFile(ctx, new String[]{f.getPath()}, new String[]{mime}, null);
         return Uri.fromFile(f);
+    }
+
+    /** Saves one finished image to Pictures/<app folder> (used by Layout). */
+    static Uri saveImage(Context ctx, Bitmap b, String name, int format, int quality) throws IOException {
+        return saveToGallery(ctx, b, sanitize(name), format, quality);
+    }
+
+    /** Writes one image to the private share folder and returns a shareable address (used by Layout). */
+    static Uri shareImage(Context ctx, Bitmap b, String name, int format, int quality, boolean clearFirst) throws IOException {
+        File dir = new File(ctx.getCacheDir(), "share");
+        dir.mkdirs();
+        if (clearFirst) {
+            File[] old = dir.listFiles();
+            if (old != null) for (File f : old) f.delete();
+        }
+        File f = new File(dir, sanitize(name) + (format == PNG ? ".png" : ".jpg"));
+        writeBitmap(b, format, quality, new FileOutputStream(f));
+        return ShareProvider.uriFor(ctx, f);
     }
 
     private static File unique(File dir, String name, String ext) {

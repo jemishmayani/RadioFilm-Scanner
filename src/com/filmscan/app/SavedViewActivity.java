@@ -80,10 +80,15 @@ public final class SavedViewActivity extends BaseActivity {
         bottom.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
         LinearLayout share = Ui.tool(this, R.drawable.ic_share, "Share");
         LinearLayout edit = Ui.tool(this, R.drawable.ic_edit, "Edit again");
+        LinearLayout layout = Ui.tool(this, R.drawable.ic_layout, "Layout");
         LinearLayout del = Ui.tool(this, R.drawable.ic_delete, "Delete");
         bottom.addView(share, Ui.weight(1));
         bottom.addView(edit, Ui.weight(1));
+        bottom.addView(layout, Ui.weight(1));
         bottom.addView(del, Ui.weight(1));
+        layout.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { startActivity(LayoutActivity.intent(SavedViewActivity.this, entry.id)); }
+        });
         col.addView(bottom, new LinearLayout.LayoutParams(-1, -2));
         setContentView(col);
 
@@ -104,7 +109,7 @@ public final class SavedViewActivity extends BaseActivity {
         edit.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { SavedActivity.editAgain(SavedViewActivity.this, entry); }
         });
-        LinearLayout[] tools = {share, edit, del};
+        LinearLayout[] tools = {share, edit, layout, del};
         for (int i = 0; i < tools.length; i++) Ui.reveal(tools[i], 80 + 50L * i);
         del.setOnClickListener(new View.OnClickListener() {
             @Override

@@ -167,6 +167,30 @@ public final class ExportUi {
             });
         }
 
+        // PDF options (shown only when PDF is chosen)
+        final LinearLayout pdfRow = new LinearLayout(a);
+        pdfRow.setGravity(Gravity.CENTER_VERTICAL);
+        pdfRow.setPadding(Ui.dp(a, 14), Ui.dp(a, 10), Ui.dp(a, 8), Ui.dp(a, 10));
+        pdfRow.setBackground(Ui.ripple(Ui.round(Ui.PANEL_HI, Ui.dp(a, 14)), true));
+        ImageView pdfIcon = new ImageView(a);
+        pdfIcon.setImageDrawable(Ui.icon(a, R.drawable.ic_pdf, Ui.ACCENT));
+        pdfRow.addView(pdfIcon, new LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)));
+        LinearLayout pdfTexts = new LinearLayout(a);
+        pdfTexts.setOrientation(LinearLayout.VERTICAL);
+        pdfTexts.setPadding(Ui.dp(a, 12), 0, 0, 0);
+        pdfTexts.addView(Ui.text(a, "PDF options", 14, Ui.LIGHT, true));
+        final TextView pdfSummary = Ui.text(a, PdfOptions.summary(prefs), 12.5f, Ui.MUTED, false);
+        pdfTexts.addView(pdfSummary);
+        pdfRow.addView(pdfTexts, Ui.weight(1));
+        ImageView chev = new ImageView(a);
+        chev.setImageDrawable(Ui.icon(a, R.drawable.ic_next, Ui.MUTED));
+        pdfRow.addView(chev, new LinearLayout.LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)));
+        pdfRow.setClickable(true);
+        Ui.pressable(pdfRow);
+        LinearLayout.LayoutParams prl = new LinearLayout.LayoutParams(-1, -2);
+        prl.topMargin = Ui.dp(a, 14);
+        c.addView(pdfRow, prl);
+
         // estimated size and free space
         final LinearLayout est = new LinearLayout(a);
         est.setGravity(Gravity.CENTER_VERTICAL);
@@ -213,12 +237,18 @@ public final class ExportUi {
                 estText.setText(base);
                 estText.setTextColor(color);
                 estIcon.getDrawable().setTint(color);
+                pdfRow.setVisibility(format[0] == Exporter.PDF ? View.VISIBLE : View.GONE);
+                pdfSummary.setText(PdfOptions.summary(prefs));
                 whereText.setText(format[0] == Exporter.PDF ? "Saves to Download/" + Exporter.folder()
                         : "Saves to Pictures/" + Exporter.folder() + " (Gallery)");
             }
         };
         updateEstimate.run();
         estimateHook[0] = updateEstimate;
+        final List<Page> optionPages = pages;
+        pdfRow.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { PdfOptions.show(a, optionPages, updateEstimate); }
+        });
 
         // actions: Share (round) + Save (wide), or just Share
         LinearLayout actions = new LinearLayout(a);

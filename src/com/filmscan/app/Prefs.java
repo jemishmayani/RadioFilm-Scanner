@@ -109,4 +109,16 @@ public final class Prefs {
     /** App identity: 0 = RadioFilm Scanner, 1 = DocScanner (name, icon and save folders). */
     public int identity() { return sp.getInt("identity", 0); }
     public void identity(int v) { sp.edit().putInt("identity", v).apply(); }
+
+    // PDF options (apply only to PDF export)
+    public int pdfPage() { return sp.getInt("pdfPage", 0); }          // PdfPage.FIT / A4 / A3 / LETTER
+    public void pdfPage(int v) { sp.edit().putInt("pdfPage", v).apply(); }
+    public int pdfMargin() { return sp.getInt("pdfMargin", 0); }      // none / small / medium / large
+    public void pdfMargin(int v) { sp.edit().putInt("pdfMargin", v).apply(); }
+    public int pdfQuality() { return sp.getInt("pdfQuality", 1); }    // 0 original, 1 balanced, 2 smaller
+    public void pdfQuality(int v) { sp.edit().putInt("pdfQuality", v).apply(); }
+
+    /** Saved scans: 0 newest, 1 oldest, 2 name A-Z, 3 name Z-A. */
+    public int savedSort() { return sp.getInt("savedSort", 0); }
+    public void savedSort(int v) { sp.edit().putInt("savedSort", v).apply(); }
 }

@@ -84,7 +84,8 @@ public abstract class BaseActivity extends Activity {
             try {
                 // WindowInsets.getInsets(Type.systemBars() | Type.displayCutout()) — Android 11+
                 Class<?> type = Class.forName("android.view.WindowInsets$Type");
-                int mask = (Integer) type.getMethod("systemBars").invoke(null) | (Integer) type.getMethod("displayCutout").invoke(null);
+                int mask = (Integer) type.getMethod("systemBars").invoke(null) | (Integer) type.getMethod("displayCutout").invoke(null)
+                        | (Integer) type.getMethod("ime").invoke(null);   // keyboard, so text fields stay visible
                 Object ins = WindowInsets.class.getMethod("getInsets", int.class).invoke(in, mask);
                 Class<?> ic = ins.getClass();
                 return new int[]{ic.getField("left").getInt(ins), ic.getField("top").getInt(ins),

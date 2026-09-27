@@ -378,7 +378,9 @@ public final class Imaging {
 
     // ------------------------------------------------------------------ finishing
 
+    /** Monitor Mode first (it removes a capture artefact), then the page's filter and adjustments. */
     public static void applyFilter(Bitmap b, Page p) {
+        if (p.moire > 0) com.filmscan.core.Moire.apply(new BitmapSource(b), p.moire);
         Filters.apply(new BitmapSource(b), p.filter, p.bright, p.contrast, p.sharp);
     }
 

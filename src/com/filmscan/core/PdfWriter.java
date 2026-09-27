@@ -48,17 +48,25 @@ public final class PdfWriter {
 
     /** Adds a page from a JPEG file, copied in small chunks so it never has to fit in memory. */
     public void addJpegPage(java.io.File jpeg, int pxW, int pxH, boolean gray) throws IOException {
+        addJpegPage(jpeg, pxW, pxH, PdfPage.layout(PdfPage.FIT, 0, pxW, pxH));
+    }
+
+    /** Adds a page with a given layout {pageW, pageH, x, y, drawW, drawH} in points (see PdfPage). */
+    public void addJpegPage(java.io.File jpeg, int pxW, int pxH, double[] layout) throws IOException {
         java.io.InputStream in = new java.io.BufferedInputStream(new java.io.FileInputStream(jpeg), 1 << 16);
         try {
-            addJpegPage(in, jpeg.length(), pxW, pxH);
+            addJpegPage(in, jpeg.length(), pxW, pxH, layout);
         } finally {
             in.close();
         }
     }
 
     private void addJpegPage(java.io.InputStream jpeg, long length, int pxW, int pxH) throws IOException {
-        double s = 842.0 / Math.max(pxW, pxH);
-        String pw = fmt(pxW * s), ph = fmt(pxH * s);
+        addJpegPage(jpeg, length, pxW, pxH, PdfPage.layout(PdfPage.FIT, 0, pxW, pxH));
+    }
+
+    private void addJpegPage(java.io.InputStream jpeg, long length, int pxW, int pxH, double[] lay) throws IOException {
+        String pw = fmt(lay[0]), ph = fmt(lay[1]);
         int img = nextId++, content = nextId++, page = nextId++;
         beginObj(img);
         write("<< /Type /XObject /Subtype /Image /Width " + pxW + " /Height " + pxH
@@ -73,7 +81,7 @@ public final class PdfWriter {
         }
         if (copied != length) throw new IOException("JPEG size changed while writing the PDF");
         write("\nendstream\nendobj\n");
-        String cs = "q " + pw + " 0 0 " + ph + " 0 0 cm /Im0 Do Q\n";
+        String cs = "q " + fmt(lay[4]) + " 0 0 " + fmt(lay[5]) + " " + fmt(lay[2]) + " " + fmt(lay[3]) + " cm /Im0 Do Q\n";
         beginObj(content);
         write("<< /Length " + cs.length() + " >>\nstream\n" + cs + "endstream\nendobj\n");
         beginObj(page);

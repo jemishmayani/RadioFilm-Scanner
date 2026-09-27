@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.filmscan.app"
-    android:versionCode="8"
-    android:versionName="1.7.0">
+    android:versionCode="9"
+    android:versionName="1.8.0">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="36" />
 
@@ -68,10 +68,11 @@
             </intent-filter>
         </activity-alias>
 
-        <activity android:name=".SavedActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".SavedActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity android:name=".SavedViewActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".RearrangeActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".SuggestionsActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".LayoutActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".AboutActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".SettingsActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".EditActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />

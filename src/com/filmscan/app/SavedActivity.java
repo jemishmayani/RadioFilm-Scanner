@@ -51,6 +51,7 @@ public final class SavedActivity extends BaseActivity {
         titleTv = Ui.title(this, "Saved scans");
         top.addView(titleTv, Ui.weight(1));
         col.addView(top, new LinearLayout.LayoutParams(-1, -2));
+        col.addView(buildTools(), new LinearLayout.LayoutParams(-1, -2));
 
         FrameLayout mid = new FrameLayout(this);
         list = new ListView(this);
@@ -78,6 +79,17 @@ public final class SavedActivity extends BaseActivity {
         ed.setPadding(Ui.dp(this, 32), Ui.dp(this, 8), Ui.dp(this, 32), 0);
         empty.addView(ed);
         mid.addView(empty, new FrameLayout.LayoutParams(-1, -1));
+        noMatch = new LinearLayout(this);
+        noMatch.setOrientation(LinearLayout.VERTICAL);
+        noMatch.setGravity(Gravity.CENTER);
+        noMatch.addView(Ui.text(this, "No scans match", 18, Ui.LIGHT, true));
+        TextView nm = Ui.text(this, "Try other words or a different date range.", 14, Ui.MUTED, false);
+        nm.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 16));
+        noMatch.addView(nm);
+        TextView clearAll = Ui.button(this, "Clear search and filters", false);
+        noMatch.addView(clearAll, new LinearLayout.LayoutParams(-2, -2));
+        clearAll.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { clearFilters(); } });
+        mid.addView(noMatch, new FrameLayout.LayoutParams(-1, -1));
         col.addView(mid, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(col);
 
@@ -112,11 +124,182 @@ public final class SavedActivity extends BaseActivity {
 
     private boolean firstShow = true;
 
+    // ------------------------------------------------------------------ search, filter, sort
+
+    private EditText search;
+    private TextView dateBtn, sortBtn, countTv;
+    private LinearLayout tools, chips, noMatch;
+    private int dateFilter = SavedQuery.ALL;
+    private long customFrom, customTo;
+
+    private static final SavedQuery.Access<SavedStore.Entry> ACCESS = new SavedQuery.Access<SavedStore.Entry>() {
+        @Override public String name(SavedStore.Entry e) { return e.name; }
+        @Override public long time(SavedStore.Entry e) { return e.time; }
+    };
+
+    private View buildTools() {
+        tools = new LinearLayout(this);
+        tools.setOrientation(LinearLayout.VERTICAL);
+        tools.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), Ui.dp(this, 4));
+        LinearLayout box = new LinearLayout(this);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setBackground(Ui.round(Ui.PANEL, Ui.dp(this, 22), 0x2EE6F0F7, Ui.dp(this, 1)));
+        box.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 2), 0);
+        ImageView si = new ImageView(this);
+        si.setImageDrawable(Ui.icon(this, R.drawable.ic_search, Ui.MUTED));
+        box.addView(si, new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20)));
+        search = new EditText(this);
+        search.setBackground(null);
+        search.setSingleLine(true);
+        search.setHint("Search scans by name");
+        search.setHintTextColor(Ui.MUTED);
+        search.setTextColor(Ui.LIGHT);
+        search.setTextSize(15);
+        search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        search.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        box.addView(search, Ui.weight(1));
+        final ImageView clear = Ui.iconButton(this, R.drawable.ic_close_circle, "Clear search");
+        clear.setImageDrawable(Ui.icon(this, R.drawable.ic_close_circle, Ui.MUTED));
+        clear.setVisibility(View.INVISIBLE);
+        box.addView(clear, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        tools.addView(box, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, Ui.dp(this, 8), 0, 0);
+        dateBtn = Ui.chip(this, "Date", R.drawable.ic_chevron_down);
+        sortBtn = Ui.chip(this, "", R.drawable.ic_chevron_down);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-2, -2);
+        bl.rightMargin = Ui.dp(this, 8);
+        row.addView(dateBtn, bl);
+        row.addView(sortBtn, new LinearLayout.LayoutParams(-2, -2));
+        countTv = Ui.text(this, "", 12.5f, Ui.MUTED, false);
+        countTv.setGravity(Gravity.END);
+        row.addView(countTv, Ui.weight(1));
+        tools.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        chips = new LinearLayout(this);
+        chips.setPadding(0, Ui.dp(this, 8), 0, 0);
+        tools.addView(chips, new LinearLayout.LayoutParams(-1, -2));
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                clear.setVisibility(s.length() > 0 ? View.VISIBLE : View.INVISIBLE);
+                refresh();
+            }
+        });
+        clear.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { search.setText(""); } });
+        dateBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { pickDate(); } });
+        sortBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { pickSort(); } });
+        return tools;
+    }
+
+    private void pickDate() {
+        new AlertDialog.Builder(this)
+                .setTitle("Show scans from")
+                .setSingleChoiceItems(SavedQuery.DATE_NAMES, dateFilter, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        d.dismiss();
+                        if (which == SavedQuery.CUSTOM) pickCustomRange();
+                        else { dateFilter = which; refresh(); }
+                    }
+                })
+                .show();
+    }
+
+    /** Custom range: pick "From", then "To" (the "To" day is included). */
+    private void pickCustomRange() {
+        final java.util.Calendar c = java.util.Calendar.getInstance();
+        android.app.DatePickerDialog from = new android.app.DatePickerDialog(this, Ui.dialogTheme(),
+                new android.app.DatePickerDialog.OnDateSetListener() {
+                    @Override
+                    public void onDateSet(android.widget.DatePicker v, int y, int m, int d) {
+                        final java.util.Calendar f = java.util.Calendar.getInstance();
+                        f.set(y, m, d, 12, 0, 0);
+                        android.app.DatePickerDialog to = new android.app.DatePickerDialog(SavedActivity.this, Ui.dialogTheme(),
+                                new android.app.DatePickerDialog.OnDateSetListener() {
+                                    @Override
+                                    public void onDateSet(android.widget.DatePicker v2, int y2, int m2, int d2) {
+                                        java.util.Calendar t = java.util.Calendar.getInstance();
+                                        t.set(y2, m2, d2, 12, 0, 0);
+                                        customFrom = f.getTimeInMillis();
+                                        customTo = t.getTimeInMillis();
+                                        dateFilter = SavedQuery.CUSTOM;
+                                        refresh();
+                                    }
+                                }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH));
+                        to.setTitle("To");
+                        to.getDatePicker().setMinDate(f.getTimeInMillis() - 12L * 3600 * 1000);
+                        to.show();
+                    }
+                }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH));
+        from.setTitle("From");
+        from.show();
+    }
+
+    private void pickSort() {
+        new AlertDialog.Builder(this)
+                .setTitle("Sort by")
+                .setSingleChoiceItems(SavedQuery.SORT_NAMES, app.prefs().savedSort(), new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        app.prefs().savedSort(which);   // remembered for next time
+                        d.dismiss();
+                        refresh();
+                    }
+                })
+                .show();
+    }
+
+    private void clearFilters() {
+        dateFilter = SavedQuery.ALL;
+        search.setText("");
+        refresh();
+    }
+
+    private String dateLabel() {
+        if (dateFilter != SavedQuery.CUSTOM) return SavedQuery.DATE_NAMES[dateFilter];
+        java.text.DateFormat f = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM);
+        long a = Math.min(customFrom, customTo), b = Math.max(customFrom, customTo);
+        return f.format(new java.util.Date(a)) + " \u2013 " + f.format(new java.util.Date(b));
+    }
+
+    /** Active filters as chips with an \u2715 to remove each one. */
+    private void updateChips() {
+        chips.removeAllViews();
+        String q = search.getText().toString().trim();
+        if (q.length() > 0) addChip("\u201c" + q + "\u201d", new Runnable() { @Override public void run() { search.setText(""); } });
+        if (dateFilter != SavedQuery.ALL) addChip(dateLabel(), new Runnable() { @Override public void run() { dateFilter = SavedQuery.ALL; refresh(); } });
+        Ui.setVisible(chips, chips.getChildCount() > 0);
+    }
+
+    private void addChip(String label, final Runnable remove) {
+        TextView t = Ui.chip(this, label, R.drawable.ic_close);
+        t.setTextColor(Ui.ACCENT);
+        t.getCompoundDrawablesRelative()[2].setTint(Ui.ACCENT);
+        t.setBackground(Ui.ripple(Ui.round(Ui.accentA(0x22), Ui.dp(this, 18), Ui.ACCENT, Ui.dp(this, 1)), true));
+        t.setContentDescription("Remove filter " + label);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.rightMargin = Ui.dp(this, 8);
+        chips.addView(t, lp);
+        t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { remove.run(); } });
+    }
+
     private void refresh() {
-        items = store.list();
+        List<SavedStore.Entry> all = store.list();
+        String q = search == null ? "" : search.getText().toString();
+        items = SavedQuery.apply(all, ACCESS, q, dateFilter, customFrom, customTo, app.prefs().savedSort(), System.currentTimeMillis());
         if (firstShow && !items.isEmpty()) { firstShow = false; list.scheduleLayoutAnimation(); }
-        titleTv.setText(items.isEmpty() ? "Saved scans" : "Saved scans (" + items.size() + ")");
-        Ui.setVisible(empty, items.isEmpty());
+        titleTv.setText(all.isEmpty() ? "Saved scans" : "Saved scans (" + all.size() + ")");
+        boolean filtered = q.trim().length() > 0 || dateFilter != SavedQuery.ALL;
+        countTv.setText(filtered ? items.size() + " of " + all.size() : (all.size() == 1 ? "1 scan" : all.size() + " scans"));
+        dateBtn.setText(dateFilter == SavedQuery.ALL ? "Date" : SavedQuery.DATE_NAMES[dateFilter].replace("…", ""));
+        sortBtn.setText(SavedQuery.SORT_NAMES[app.prefs().savedSort()]);
+        updateChips();
+        Ui.setVisible(tools, !all.isEmpty());
+        Ui.setVisible(empty, all.isEmpty());
+        Ui.setVisible(noMatch, !all.isEmpty() && items.isEmpty());
         Ui.setVisible(list, !items.isEmpty());
         adapter.notifyDataSetChanged();
     }

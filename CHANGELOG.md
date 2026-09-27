@@ -3,6 +3,15 @@
 All notable changes to RadioFilm Scanner. Newest first.
 Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown in brackets.
 
+## [1.8.0] (9) - 2026-09-27
+### Added
+- **Monitor Mode** for photos of a screen: reduces moiré (rainbow ripples) with Off / Low / Medium / High or a custom intensity. It is its own layer, so filters, adjustments, crop, rotate and anonymise all still apply; included in undo, redo, reset and "Apply to all".
+- **PDF options** with a live page preview: page size (Fit to image, A4, A3, Letter), margins (None, Small, Medium, Large) and file size (Original, Balanced, Smaller), with an estimated PDF size. Applies only to PDFs.
+- **Saved scans search and filters**: live search by name, date filters (Today, Yesterday, Last 7/30 days, This month, This year, custom range), removable filter chips, a match count, and sorting (newest, oldest, name A-Z / Z-A) that is remembered.
+- **Layout** for saved scans: choose pages, arrange them in a grid (Auto, 1x2 ... 3x3 or custom) with orientation, spacing, margins, border, background and page numbers, preview live, and export as JPEG or PNG. The saved scan is not changed.
+### Changed
+- Screens with a text field now stay visible above the keyboard.
+
 ## [1.7.0] (8) - 2026-09-26
 Includes the 1.6.0 test build (7), which was not published separately.
 ### Added

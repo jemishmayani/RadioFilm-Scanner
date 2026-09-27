@@ -34,12 +34,22 @@ public final class Storage {
         Prefs prefs = App.get().prefs();
         long maxPx = Imaging.maxOutputPixels(c, prefs.maxMp());
         int quality = format == Exporter.PNG ? 100 : prefs.quality();
+        if (format == Exporter.PDF) {
+            quality = PdfQuality.jpegQuality(prefs.pdfQuality(), prefs);
+            int cap = PdfQuality.maxSide(prefs.pdfQuality());
+            if (cap > 0) maxPx = Math.min(maxPx, (long) cap * cap);
+        }
         double total = 0;
         for (Page p : pages) {
             int dw = p.dispW(), dh = p.dispH();
             if (dw <= 0 || dh <= 0) continue;
             double[] sz = Geom.outputSize(Imaging.quadPx(p, dw, dh), dw, dh);
             double px = Math.min(maxPx, sz[0] * sz[1]);
+            if (format == Exporter.PDF) {
+                int cap = PdfQuality.maxSide(prefs.pdfQuality());
+                double longSide = Math.max(sz[0], sz[1]);
+                if (cap > 0 && longSide > cap) px = Math.min(px, sz[0] * sz[1] * (cap / longSide) * (cap / longSide));
+            }
             total += px * bytesPerPixel(format, quality, Filters.isGray(p.filter)) + (format == Exporter.PDF ? 4096 : 0);
         }
         return (long) total;

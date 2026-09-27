@@ -35,7 +35,7 @@ public final class EditActivity extends BaseActivity {
     private static final String EXTRA_ID = "page";
     public static final String RESULT_PAGE = "pageId";
     private static final int REQ_ADD = 31, REQ_ARRANGE = 32, REQ_STORAGE = 33;
-    private static final int MODE_CROP = 0, MODE_FILTER = 1, MODE_ADJUST = 2, MODE_REDACT = 3;
+    private static final int MODE_CROP = 0, MODE_FILTER = 1, MODE_ADJUST = 2, MODE_REDACT = 3, MODE_MONITOR = 4;
 
     private App app;
     private Session session;
@@ -72,6 +72,11 @@ public final class EditActivity extends BaseActivity {
     private int redactGen;
     private static int redactType = com.filmscan.core.Redact.BOX;
     private final List<LinearLayout> typeChips = new ArrayList<LinearLayout>();
+    // Monitor Mode: its own processing layer, independent of the Filters tool
+    private LinearLayout monitorPanel;
+    private TextView monitorPill, monitorValue;
+    private SeekBar sbMonitor;
+    private final List<TextView> monitorChips = new ArrayList<TextView>();
     private PageSwiper swiper;
     private float[] beforeFull;
 
@@ -145,6 +150,19 @@ public final class EditActivity extends BaseActivity {
         hintRow.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 6), 0);
         hintTv = Ui.text(this, "", 13, Ui.MUTED, false);
         hintTv.setMaxLines(2);
+        monitorPill = Ui.chip(this, "Monitor", 0);
+        android.graphics.drawable.Drawable md = Ui.icon(this, R.drawable.ic_monitor, Ui.LIGHT);
+        int mds = Ui.dp(this, 18);
+        md.setBounds(0, 0, mds, mds);
+        monitorPill.setCompoundDrawablesRelative(md, null, null, null);
+        monitorPill.setCompoundDrawablePadding(Ui.dp(this, 6));
+        monitorPill.setContentDescription("Monitor Mode: reduce moiré in photos of a screen");
+        LinearLayout.LayoutParams mpl = new LinearLayout.LayoutParams(-2, -2);
+        mpl.rightMargin = Ui.dp(this, 10);
+        hintRow.addView(monitorPill, mpl);
+        monitorPill.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { setMode(mode == MODE_MONITOR ? MODE_FILTER : MODE_MONITOR); }
+        });
         hintRow.addView(hintTv, Ui.weight(1));
         undoBtn = Ui.iconButton(this, R.drawable.ic_undo, "Undo");
         redoBtn = Ui.iconButton(this, R.drawable.ic_redo, "Redo");
@@ -184,6 +202,8 @@ public final class EditActivity extends BaseActivity {
         panelHost.addView(filterPanel);
         panelHost.addView(adjustPanel);
         panelHost.addView(redactPanel);
+        monitorPanel = buildMonitorPanel();
+        panelHost.addView(monitorPanel);
         col.addView(panelHost, new LinearLayout.LayoutParams(-1, -2));
 
         View div = new View(this);
@@ -410,6 +430,109 @@ public final class EditActivity extends BaseActivity {
         return sb;
     }
 
+    private static final int[] MONITOR_LEVELS = {0, com.filmscan.core.Moire.LOW, com.filmscan.core.Moire.MEDIUM, com.filmscan.core.Moire.HIGH};
+    private static final String[] MONITOR_NAMES = {"Off", "Low", "Medium", "High"};
+
+    private LinearLayout buildMonitorPanel() {
+        LinearLayout p = new LinearLayout(this);
+        p.setOrientation(LinearLayout.VERTICAL);
+        p.setPadding(Ui.dp(this, 16), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(Ui.text(this, "Monitor Mode", 14, Ui.LIGHT, true), Ui.weight(1));
+        TextView reset = textAction("Reset", Ui.LIGHT);
+        head.addView(reset);
+        TextView all = applyAllButton();
+        head.addView(all);
+        p.addView(head);
+        TextView d = Ui.text(this, "Reduces rainbow ripples (moiré) in photos of a screen. Filters and all other edits still apply on top.", 12.5f, Ui.MUTED, false);
+        d.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 8));
+        p.addView(d);
+        LinearLayout levels = new LinearLayout(this);
+        for (int i = 0; i < MONITOR_LEVELS.length; i++) {
+            final int level = MONITOR_LEVELS[i];
+            TextView c = Ui.chip(this, MONITOR_NAMES[i], 0);
+            c.setGravity(Gravity.CENTER);
+            c.setTag(level);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 40), 1);
+            if (i > 0) lp.leftMargin = Ui.dp(this, 8);
+            levels.addView(c, lp);
+            monitorChips.add(c);
+            c.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { setMonitor(level); }
+            });
+        }
+        p.addView(levels, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(Ui.text(this, "Intensity", 13.5f, Ui.MUTED, false), new LinearLayout.LayoutParams(Ui.dp(this, 72), -2));
+        sbMonitor = new SeekBar(this);
+        sbMonitor.setMax(100);
+        row.addView(sbMonitor, Ui.weight(1));
+        monitorValue = Ui.text(this, "", 13.5f, Ui.LIGHT, false);
+        monitorValue.setGravity(Gravity.END);
+        row.addView(monitorValue, new LinearLayout.LayoutParams(Ui.dp(this, 64), -2));
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 44));
+        rl.topMargin = Ui.dp(this, 6);
+        p.addView(row, rl);
+        sbMonitor.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                if (!fromUser) return;
+                page.moire = v;
+                updateMonitorUi();
+                reprocess();
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) { snapshot(); }
+            @Override public void onStopTrackingTouch(SeekBar s) { edited(); }
+        });
+        reset.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMonitor(0); } });
+        all.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                for (Page q : session.pages) {
+                    if (q == page || q.moire == page.moire) continue;
+                    stack(undoStacks, q.id).push(q.copy());
+                    stack(redoStacks, q.id).clear();
+                    q.moire = page.moire;
+                    q.version++;
+                }
+                session.save();
+                stripSoon();
+                Toast.makeText(EditActivity.this, "Monitor Mode " + com.filmscan.core.Moire.label(page.moire)
+                        + " applied to all " + session.pages.size() + " pages", Toast.LENGTH_SHORT).show();
+            }
+        });
+        return p;
+    }
+
+    private void setMonitor(int level) {
+        if (page.moire == level) return;
+        snapshot();
+        page.moire = level;
+        edited();
+        updateMonitorUi();
+        reprocess();
+    }
+
+    /** Pill above the photo, preset chips and slider all reflect the page's Monitor Mode level. */
+    private void updateMonitorUi() {
+        if (monitorPill == null || page == null) return;
+        boolean on = page.moire > 0, open = mode == MODE_MONITOR;
+        monitorPill.setText(on ? "Monitor \u00b7 " + com.filmscan.core.Moire.label(page.moire).replace("Custom ", "") : "Monitor");
+        monitorPill.setTextColor(on || open ? Ui.ACCENT : Ui.LIGHT);
+        monitorPill.getCompoundDrawablesRelative()[0].setTint(on || open ? Ui.ACCENT : Ui.LIGHT);
+        monitorPill.setBackground(Ui.ripple(on || open ? Ui.round(Ui.accentA(0x26), Ui.dp(this, 18), Ui.ACCENT, Ui.dp(this, 1.5f))
+                : Ui.round(Ui.PANEL_HI, Ui.dp(this, 18), 0x2EE6F0F7, Ui.dp(this, 1)), true));
+        for (TextView c : monitorChips) {
+            boolean sel = (Integer) c.getTag() == page.moire;
+            c.setTextColor(sel ? Ui.ON_ACCENT : Ui.LIGHT);
+            c.setBackground(Ui.ripple(sel ? Ui.round(Ui.ACCENT, Ui.dp(this, 18)) : Ui.round(Ui.PANEL_HI, Ui.dp(this, 18)), true));
+        }
+        if (sbMonitor != null && sbMonitor.getProgress() != page.moire) sbMonitor.setProgress(page.moire);
+        if (monitorValue != null) monitorValue.setText(page.moire == 0 ? "Off" : page.moire + "%");
+    }
+
     private LinearLayout buildRedactPanel() {
         LinearLayout p = new LinearLayout(this);
         p.setOrientation(LinearLayout.VERTICAL);
@@ -482,11 +605,14 @@ public final class EditActivity extends BaseActivity {
         } else if ((old == MODE_CROP) != crop) {
             crossfade(crop ? cropView : zoomView, crop ? zoomView : cropView);
         }
-        LinearLayout panel = crop ? cropPanel : m == MODE_FILTER ? filterPanel : m == MODE_ADJUST ? adjustPanel : redactPanel;
+        LinearLayout panel = crop ? cropPanel : m == MODE_FILTER ? filterPanel : m == MODE_ADJUST ? adjustPanel
+                : m == MODE_MONITOR ? monitorPanel : redactPanel;
         Ui.setVisible(cropPanel, crop);
         Ui.setVisible(filterPanel, m == MODE_FILTER);
         Ui.setVisible(adjustPanel, m == MODE_ADJUST);
         Ui.setVisible(redactPanel, m == MODE_REDACT);
+        Ui.setVisible(monitorPanel, m == MODE_MONITOR);
+        updateMonitorUi();
         if (old >= 0 && old != m) Ui.reveal(panel, 0);
         Ui.setToolActive(toolCrop, crop);
         Ui.setToolActive(toolFilter, m == MODE_FILTER);
@@ -529,6 +655,7 @@ public final class EditActivity extends BaseActivity {
         String s;
         if (mode == MODE_CROP) s = cropHint + (many ? " Swipe to change page." : "");
         else if (mode == MODE_REDACT) s = "";
+        else if (mode == MODE_MONITOR) s = "Zoom in to check fine detail.";
         else s = many ? "Pinch to zoom. Swipe to change page." : "Pinch or double-tap to zoom.";
         hintTv.setText(s);
     }
@@ -569,6 +696,7 @@ public final class EditActivity extends BaseActivity {
         Ui.setVisible(applyAdjustAll, n > 1);
         syncSliders();
         syncFilterUi();
+        updateMonitorUi();
         zoomView.setGrid(page.gridR, page.gridC);
         zoomView.setBoxes(page.redact);
         Ui.setToolActive(toolGrid, page.hasGrid());
@@ -686,6 +814,7 @@ public final class EditActivity extends BaseActivity {
         page.filter = f;
         edited();
         syncFilterUi();
+        updateMonitorUi();
         View chip = chipFrames.get(f);
         chip.setScaleX(0.88f);
         chip.setScaleY(0.88f);
@@ -889,6 +1018,7 @@ public final class EditActivity extends BaseActivity {
         stripSoon();
         syncSliders();
         syncFilterUi();
+        updateMonitorUi();
         zoomView.setGrid(page.gridR, page.gridC);
         zoomView.setBoxes(page.redact);
         Ui.setToolActive(toolGrid, page.hasGrid());
