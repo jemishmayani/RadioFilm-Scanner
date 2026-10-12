@@ -58,6 +58,27 @@ public final class Session {
         save();
     }
 
+    /**
+     * Retake: puts a new photo into an existing page, in the same position and with the same id,
+     * so page numbers never change. Its look (filter, adjustments, split, anonymised areas) is kept;
+     * the crop comes from the new photo. The old photo is deleted unless another page uses it.
+     */
+    public void replacePhoto(Page old, Page fresh) {
+        String oldFile = old.file;
+        old.file = fresh.file;
+        old.rawW = fresh.rawW;
+        old.rawH = fresh.rawH;
+        old.exif = fresh.exif;
+        old.quad = fresh.quad == null ? null : fresh.quad.clone();
+        old.detected = fresh.detected;
+        old.version++;
+        pages.remove(fresh);   // in case it was added
+        boolean shared = false;
+        for (Page o : pages) if (o.file.equals(oldFile)) { shared = true; break; }
+        if (!shared && !oldFile.equals(old.file)) new File(oldFile).delete();
+        save();
+    }
+
     public void clear() {
         if (!ownsDir) {
             // editing a saved scan: remove its pages one by one, never the folder's other files

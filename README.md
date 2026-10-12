@@ -4,7 +4,7 @@
 
 Photograph a film on a lightbox (or a report, a prescription, a whiteboard), and the app finds the edges, straightens the perspective, enhances it, and saves a clean full-resolution JPEG, PNG or PDF. No account, no cloud, no ads. The app does not even request internet access.
 
-![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.9.0-orange)
+![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.10.0-orange)
 
 <p align="center">
   <img src="docs/camera.jpg" width="24%" alt="Camera with live edge detection">
@@ -43,7 +43,9 @@ Every feature is available in both. Switch any time in **Settings > Appearance >
 - Opens in **crop mode** with the detected edges. Drag a corner or a whole edge; a magnifier shows the pixels under your finger, and handles **snap to the nearest film or paper edge**. Pinch to zoom, pan with two fingers, double-tap to zoom in or back to fit.
 - **Perspective correction with true aspect ratio**, so results are not squashed.
 - **Undo and redo** for every edit, **Reset** in each tool, and "Reset all edits" to return a page to the original photo. Editing is non-destructive: the original photo is never changed.
-- **Thumbnail strip** to jump to any page, swipe between pages, **+** to add pages, and **Rearrange** (drag and drop) when there are two or more.
+- **Thumbnail strip** to jump to any page, swipe between pages, and **+** to add pages.
+- **Retake** any page: one new photo goes back into the same place, so page numbers never change, and the page keeps its filter, adjustments and anonymised areas.
+- **Preview** before export: swipe through the finished pages like a gallery, pinch to zoom, rotate, retake, delete or reorder them, or jump back to crop, filters or anonymise. The flow is Scan > Edit > Preview > Export.
 - **11 filters:** No effects, Auto, Pro color, Grayscale, **X-ray enhance**, **X-ray detail**, Negative, High contrast, Brighten, Whiteboard, B&W document. Brightness, contrast and sharpness, with **Apply to all** pages.
 - Rotate, **split multi-slice films into panels** (up to 8 x 8, each saved as its own image), and duplicate a page to crop a second area.
 - **Anonymise** patient details with a **black box**, **blur** or **pixelate** before sharing. Black box is the safest choice for names and IDs.
@@ -66,6 +68,7 @@ Every feature is available in both. Switch any time in **Settings > Appearance >
 - Save format, output size limit, JPEG quality, and where files go.
 - File naming and fully customisable name suggestion sets.
 - App name and icon (RadioFilm Scanner or DocScanner) and accent colour.
+- **Export and import scans**: every saved scan, with its original photos and all edits, in one .zip file. Use it to move scans to a new phone or between the GitHub and Google Play versions.
 - **Export and import all settings** to a file.
 - Camera: auto-capture, edge snap, grid, shutter sound, and a viewfinder rotation override for unusual devices.
 - **Check for updates** (see below).

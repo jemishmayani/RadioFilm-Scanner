@@ -34,7 +34,7 @@ import java.util.List;
 public final class EditActivity extends BaseActivity {
     private static final String EXTRA_ID = "page";
     public static final String RESULT_PAGE = "pageId";
-    private static final int REQ_ADD = 31, REQ_ARRANGE = 32, REQ_STORAGE = 33;
+    private static final int REQ_ADD = 31, REQ_ARRANGE = 32, REQ_RETAKE = 34;
     private static final int MODE_CROP = 0, MODE_FILTER = 1, MODE_ADJUST = 2, MODE_REDACT = 3;
 
     private App app;
@@ -42,9 +42,10 @@ public final class EditActivity extends BaseActivity {
     private Page page;
     private LinearLayout strip;
     private android.widget.HorizontalScrollView stripScroll;
-    private ImageView arrangeBtn;
+    private View arrangeBtn;      // the Retake button
     private String stripSignature = "";
-    private Runnable pendingSave;
+    private String retakeId;      // page being retaken while the camera is open
+    private String boundFile;     // photo of the page on screen
     private int mode = -1;
 
     private FrameLayout stage;
@@ -92,6 +93,7 @@ public final class EditActivity extends BaseActivity {
             Page kept = session.find(b.getString("page"));
             if (kept != null) page = kept;
             startMode = b.getInt("mode", MODE_CROP);
+            retakeId = b.getString("retake");
         }
         buildUi();
         setMode(startMode);
@@ -102,6 +104,7 @@ public final class EditActivity extends BaseActivity {
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         if (page != null) out.putString("page", page.id);
+        if (retakeId != null) out.putString("retake", retakeId);
         out.putInt("mode", mode < 0 ? MODE_CROP : mode);
     }
 
@@ -124,20 +127,8 @@ public final class EditActivity extends BaseActivity {
         top.addView(back);
         titleTv = Ui.title(this, "");
         top.addView(titleTv, Ui.weight(1));
-        arrangeBtn = Ui.iconButton(this, R.drawable.ic_rearrange, "Rearrange pages");
         ImageView del = Ui.iconButton(this, R.drawable.ic_delete, "Delete page");
-        top.addView(arrangeBtn);
         top.addView(del);
-        TextView done = Ui.button(this, "Save", true);
-        done.setCompoundDrawablesRelativeWithIntrinsicBounds(Ui.icon(this, R.drawable.ic_save, Ui.ON_ACCENT), null, null, null);
-        done.setCompoundDrawablePadding(Ui.dp(this, 6));
-        done.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 18), 0);
-        done.setMinHeight(Ui.dp(this, 40));
-        done.setBackground(Ui.ripple(Ui.round(Ui.ACCENT, Ui.dp(this, 20)), true));
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-2, Ui.dp(this, 40));
-        dlp.leftMargin = Ui.dp(this, 4);
-        dlp.rightMargin = Ui.dp(this, 8);
-        top.addView(done, dlp);
         col.addView(top, new LinearLayout.LayoutParams(-1, -2));
 
         LinearLayout hintRow = new LinearLayout(this);
@@ -199,6 +190,29 @@ public final class EditActivity extends BaseActivity {
         toolHide = Ui.tool(this, R.drawable.ic_hide, "Anonymise");
         for (LinearLayout t : new LinearLayout[]{toolCrop, toolFilter, toolAdjust, tRot, toolGrid, toolHide}) tools.addView(t, Ui.weight(1));
         col.addView(tools, new LinearLayout.LayoutParams(-1, -2));
+
+        // bottom: retake this page, or go on to the preview
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        actions.setBackgroundColor(Ui.PANEL);
+        int ap = Ui.dp(this, 12);
+        actions.setPadding(ap, Ui.dp(this, 4), ap, Ui.dp(this, 10));
+        TextView retakeBtn = Ui.button(this, "Retake", false);
+        retakeBtn.setCompoundDrawablesRelativeWithIntrinsicBounds(Ui.icon(this, R.drawable.ic_retake, Ui.LIGHT), null, null, null);
+        retakeBtn.setCompoundDrawablePadding(Ui.dp(this, 8));
+        retakeBtn.setGravity(Gravity.CENTER);
+        retakeBtn.setContentDescription("Retake this page");
+        actions.addView(retakeBtn, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
+        View gapV = new View(this);
+        actions.addView(gapV, new LinearLayout.LayoutParams(Ui.dp(this, 12), 1));
+        TextView done = Ui.button(this, "Next", true);
+        done.setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, Ui.icon(this, R.drawable.ic_next, Ui.ON_ACCENT), null);
+        done.setCompoundDrawablePadding(Ui.dp(this, 6));
+        done.setGravity(Gravity.CENTER);
+        done.setBackground(Ui.ripple(Ui.round(Ui.ACCENT, Ui.dp(this, 24)), true));
+        actions.addView(done, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
+        col.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+        arrangeBtn = retakeBtn;
         setContentView(col);
 
         back.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { goBack(); } });
@@ -207,8 +221,7 @@ public final class EditActivity extends BaseActivity {
         arrangeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mode == MODE_CROP && !commitCrop(true)) return;
-                startActivityForResult(new Intent(EditActivity.this, RearrangeActivity.class), REQ_ARRANGE);
+                retake(page);
             }
         });
         del.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { confirmDelete(); } });
@@ -556,13 +569,13 @@ public final class EditActivity extends BaseActivity {
     // ================================================================== page binding
 
     private void bindPage() {
+        boundFile = page.file;
         filtered = null;
         redactGen++;
         int idx = session.indexOf(page), n = session.pages.size();
         SavedStore.Entry editing = app.editingEntry();
         titleTv.setText(editing != null ? editing.name : n > 1 ? "Page " + (idx + 1) + " of " + n : "Scan");
         titleTv.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        Ui.setVisible(arrangeBtn, n > 1);
         rebuildStrip(false);
         selectThumb();
         Ui.setVisible(applyFilterAll, n > 1);
@@ -586,12 +599,19 @@ public final class EditActivity extends BaseActivity {
 
     private void load() {
         final int g = ++loadGen;
-        spinner.setVisibility(View.VISIBLE);
         final Page snap = page.copy();
+        final Bitmap known = app.cached(snap.file + "@up");
+        // a page already in memory opens without a spinner; otherwise show it only if loading is slow
+        spinner.setVisibility(View.GONE);
+        if (known == null) app.main.postDelayed(new Runnable() {
+            @Override public void run() { if (g == loadGen && upright == null) spinner.setVisibility(View.VISIBLE); }
+        }, 180);
         app.run(new Runnable() {
             @Override
             public void run() {
-                final Bitmap up = Imaging.oriented(snap, Imaging.PREVIEW_SIDE);
+                Bitmap u = known != null ? known : Imaging.oriented(snap, Imaging.PREVIEW_SIDE);
+                if (known == null && u != null) app.cache(snap.file + "@up", u);
+                final Bitmap up = u;
                 if (up == null) {
                     app.ui(new Runnable() {
                         @Override
@@ -633,10 +653,31 @@ public final class EditActivity extends BaseActivity {
                         if (mode == MODE_CROP) spinner.setVisibility(View.GONE);
                         reprocess();
                         buildThumbs(b);
+                        prefetchNeighbours(g);
                     }
                 });
             }
         });
+    }
+
+    /** Decodes the next and previous photos in the background, so swiping to them is instant. */
+    private void prefetchNeighbours(final int g) {
+        int i = session.indexOf(page);
+        for (int d : new int[]{1, -1}) {
+            int j = i + d;
+            if (j < 0 || j >= session.pages.size()) continue;
+            final Page n = session.pages.get(j).copy();
+            final String key = n.file + "@up";
+            if (app.cached(key) != null) continue;
+            app.run(new Runnable() {
+                @Override
+                public void run() {
+                    if (g != loadGen || app.cached(key) != null) return;   // moved on: skip
+                    Bitmap u = Imaging.oriented(n, Imaging.PREVIEW_SIDE);
+                    if (u != null) app.cache(key, u);
+                }
+            });
+        }
     }
 
     private void step(int d) {
@@ -965,17 +1006,7 @@ public final class EditActivity extends BaseActivity {
 
     /** Turns the page clockwise by quarter turns, keeping anonymised areas and the grid on the same content. */
     private void rotateBy(int steps) {
-        for (int k = 0; k < (steps & 3); k++) {
-            page.rot = (page.rot + 1) & 3;
-            // (x,y) -> (1-y, x)
-            for (float[] r : page.redact) {
-                float l = r[0], t = r[1], rr = r[2], b = r[3];
-                r[0] = 1 - b; r[1] = l; r[2] = 1 - t; r[3] = rr;
-            }
-            int gr = page.gridR;
-            page.gridR = page.gridC;
-            page.gridC = gr;
-        }
+        for (int k = 0; k < (steps & 3); k++) page.turn();
         zoomView.setGrid(page.gridR, page.gridC);
         edited();
         cropView.setRotationSteps(page.rot);
@@ -1208,7 +1239,7 @@ public final class EditActivity extends BaseActivity {
         if (p == null) return;
         new AlertDialog.Builder(this)
                 .setTitle("Page " + (session.indexOf(p) + 1))
-                .setItems(new String[]{"Duplicate to crop another area", "Reset all edits", "Delete"}, new DialogInterface.OnClickListener() {
+                .setItems(new String[]{"Duplicate to crop another area", "Retake photo", "Reset all edits", "Delete"}, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int which) {
                         if (mode == MODE_CROP) commitCrop(false);
@@ -1222,6 +1253,8 @@ public final class EditActivity extends BaseActivity {
                             bindPage();
                             if (mode != MODE_CROP) setMode(MODE_CROP);
                         } else if (which == 1) {
+                            retake(p);
+                        } else if (which == 2) {
                             if (p != page) { page = p; bindPage(); }
                             resetPage();
                         } else {
@@ -1240,63 +1273,45 @@ public final class EditActivity extends BaseActivity {
 
     // ================================================================== save / leave
 
+    /** Next: the Preview screen, where pages are reordered and exported. */
     private void save() {
         if (mode == MODE_CROP && !commitCrop(true)) return;
         if (session.pages.isEmpty()) return;
-        ExportUi.dialog(this, session.pages, ExportUi.defaultName(), false, new ExportUi.Choice() {
-            @Override
-            public void chosen(int format, boolean split, String name, boolean share) {
-                if (share) ExportUi.run(EditActivity.this, session.pages, format, split, name, true, null, null);
-                else saveNow(format, split, name);
-            }
-        });
+        startActivityForResult(RearrangeActivity.intent(this, page.id), REQ_ARRANGE);
     }
 
-    private void saveNow(final int format, final boolean split, final String name) {
-        if (Build.VERSION.SDK_INT >= 23 && Build.VERSION.SDK_INT < 29
-                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            pendingSave = new Runnable() { @Override public void run() { saveNow(format, split, name); } };
-            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
-            return;
+    /** Opens the camera for one new photo of this page; it replaces the photo in the same place. */
+    private void retake(Page p) {
+        if (p == null || session.find(p.id) == null) return;
+        if (mode == MODE_CROP) commitCrop(false);
+        retakeId = p.id;
+        startActivityForResult(CameraActivity.intentRetake(this, p.id), REQ_RETAKE);
+    }
+
+    /** Undo steps recorded for a photo that has since been replaced (retake) no longer apply. */
+    private void dropStaleHistory() {
+        for (java.util.Map<String, java.util.ArrayDeque<Page>> m : java.util.Arrays.asList(undoStacks, redoStacks)) {
+            java.util.Iterator<java.util.Map.Entry<String, java.util.ArrayDeque<Page>>> it = m.entrySet().iterator();
+            while (it.hasNext()) {
+                java.util.Map.Entry<String, java.util.ArrayDeque<Page>> e = it.next();
+                Page now = session.find(e.getKey());
+                Page snap = e.getValue().peek();
+                if (now == null || snap == null || !now.file.equals(snap.file)) it.remove();
+            }
         }
-        final List<Page> batch = new ArrayList<Page>();
-        for (Page p : session.pages) batch.add(p.copy());
-        final String clean = Exporter.sanitize(name);
-        final SavedStore.Entry editing = app.editingEntry();
-        final boolean[] stored = {false};
-        ExportUi.run(this, batch, format, split, name, false, new ExportUi.After() {
-            @Override
-            public void run(Exporter.Result r) throws Exception {
-                if (editing != null) app.saved().update(editing, clean, format, r);   // the same group, updated
-                else app.saved().add(clean, format, batch, r);                         // a new group
-                stored[0] = true;
-            }
-        }, new ExportUi.Done() {
-            @Override
-            public void done(Exporter.Result r) {
-                if (!stored[0]) return;
-                if (editing != null) {
-                    app.endEdit();
-                    Toast.makeText(EditActivity.this, "Updated \u201c" + clean + "\u201d in " + r.where, Toast.LENGTH_LONG).show();
-                    startActivity(new Intent(EditActivity.this, SavedActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-                } else {
-                    session.clear();
-                    startActivity(CameraActivity.intent(EditActivity.this).putExtra(CameraActivity.EXTRA_SAVED, clean)
-                            .putExtra(CameraActivity.EXTRA_WHERE, r.where));
-                }
-                finish();
-            }
-        });
     }
 
-    @Override
-    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
-        if (req != REQ_STORAGE) return;
-        Runnable r = pendingSave;
-        pendingSave = null;
-        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED && r != null) r.run();
-        else Toast.makeText(this, "Storage permission is needed to save to your gallery. You can still share.", Toast.LENGTH_LONG).show();
+    /** After a retake: the camera has already put the new photo into the page; show it. */
+    private void showRetaken(String id) {
+        Page p = session.find(id);
+        if (p == null) return;
+        dropStaleHistory();
+        page = p;
+        if (mode != MODE_CROP) setMode(MODE_CROP);
+        bindPage();
+        String msg = "Page " + (session.indexOf(p) + 1) + " retaken.";
+        if (!p.redact.isEmpty()) msg += " Check the anonymised areas still cover what they should.";
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
     @Override
@@ -1304,13 +1319,13 @@ public final class EditActivity extends BaseActivity {
         super.onResume();
         if (session.pages.isEmpty()) { leave(); return; }
         if (session.find(page.id) == null) { page = session.pages.get(0); bindPage(); return; }
+        if (!page.file.equals(boundFile)) { showRetaken(page.id); return; }   // photo replaced (retake)
         if (!signature().equals(stripSignature)) {
             // pages were added or reordered elsewhere
             int idx = session.indexOf(page), n = session.pages.size();
             SavedStore.Entry editing = app.editingEntry();
             titleTv.setText(editing != null ? editing.name : n > 1 ? "Page " + (idx + 1) + " of " + n : "Scan");
-            Ui.setVisible(arrangeBtn, n > 1);
-            rebuildStrip(false);
+                rebuildStrip(false);
             selectThumb();
         }
     }
@@ -1318,7 +1333,31 @@ public final class EditActivity extends BaseActivity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == REQ_ARRANGE && res == RearrangeActivity.RESULT_EXPORTED) { finish(); return; }
+        if (req == REQ_ARRANGE) { dropStaleHistory(); updateUndoUi(); }
         String id = data == null ? null : data.getStringExtra(RESULT_PAGE);
+        if (req == REQ_RETAKE) {
+            String target = retakeId;
+            retakeId = null;
+            String shown = id != null ? id : target;
+            Page p = session.find(shown);
+            if (p != null && !p.file.equals(boundFile)) showRetaken(p.id);
+            return;
+        }
+        if (req == REQ_ARRANGE && id != null && session.find(id) != null) {
+            String act = data.getStringExtra(RearrangeActivity.RESULT_ACTION);
+            int m = "filter".equals(act) ? MODE_FILTER : "adjust".equals(act) ? MODE_ADJUST : "redact".equals(act) ? MODE_REDACT : MODE_CROP;
+            page = session.find(id);
+            bindPage();
+            if (mode != m) setMode(m);
+            return;
+        }
+        if (req == REQ_ARRANGE && id == null && session.find(page.id) != null) {
+            // back from Preview: the page may have been rotated or retaken there
+            page = session.find(page.id);
+            bindPage();
+            return;
+        }
         if ((req == REQ_ADD || req == REQ_ARRANGE) && id != null && session.find(id) != null) {
             // new photos open straight in crop mode; a tapped page in Rearrange opens here
             page = session.find(id);

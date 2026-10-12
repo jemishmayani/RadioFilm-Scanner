@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:affinity="https://www.affinity.studio/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g id="Scanner-Viewfinder" affinity:id="Scanner Viewfinder" transform="matrix(0.9375,0,0,0.9375,32,32)">
+        <path d="M731,128L896,128L896,293" style="fill:none;stroke:rgb(251,219,141);stroke-width:35.56px;"/>
+        <path d="M896,731L896,896L731,896" style="fill:none;stroke:rgb(251,219,141);stroke-width:35.56px;"/>
+        <path d="M293,896L128,896L128,731" style="fill:none;stroke:rgb(251,219,141);stroke-width:35.56px;"/>
+        <path d="M128,293L128,128L293,128" style="fill:none;stroke:rgb(251,219,141);stroke-width:35.56px;"/>
+    </g>
+    <g id="Frame" transform="matrix(1,0,0,1,20.464844,-20.5)">
+        <path d="M662.505,280C680.478,280 695.07,294.592 695.07,312.566L695.07,752.434C695.07,770.408 680.478,785 662.505,785L320.566,785C302.592,785 288,770.408 288,752.434L288,312.566C288,294.592 302.592,280 320.566,280L662.505,280Z" style="fill:rgb(101,131,154);stroke:rgb(132,160,180);stroke-width:16.67px;"/>
+    </g>
+    <g id="Brain">
+        <g id="Skull-Brain" affinity:id="Skull Brain" transform="matrix(0.836364,0,0,0.792998,221.781818,105.984779)">
+            <ellipse cx="347" cy="512" rx="165" ry="205.313" style="fill:rgb(184,202,215);stroke:rgb(243,248,251);stroke-width:25.56px;"/>
+        </g>
+        <g id="Ventricle-Lt" affinity:id="Ventricle Lt" transform="matrix(1,0,0,1.080357,65,0.435136)">
+            <path d="M498.5,405.488C519.595,417.139 481.625,450.868 481.625,472.595C481.625,494.322 520.124,536.551 505.5,545.256C497.784,549.849 447,497.023 447,466.116C447,435.208 465.62,387.326 498.5,405.488Z" style="fill:rgb(110,137,159);"/>
+        </g>
+        <g id="Ventricle-Rt" affinity:id="Ventricle Rt" transform="matrix(-1,0,0,1.080357,959,0.435136)">
+            <path d="M498.5,405.488C519.595,417.139 481.625,450.868 481.625,472.595C481.625,494.322 520.124,536.551 505.5,545.256C497.784,549.849 447,497.023 447,466.116C447,435.208 465.62,387.326 498.5,405.488Z" style="fill:rgb(110,137,159);"/>
+        </g>
+        <g id="Midline" transform="matrix(0.6,0,0,1,206.3,-1)">
+            <path d="M511.5,361C511.776,361 512,361.134 512,361.3L512,664.7C512,664.866 511.776,665 511.5,665L507.5,665C507.224,665 507,664.866 507,664.7L507,361.3C507,361.134 507.224,361 507.5,361L511.5,361Z" style="fill:rgb(110,137,159);"/>
+        </g>
+    </g>
+</svg>

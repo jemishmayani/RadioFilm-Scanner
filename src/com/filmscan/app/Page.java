@@ -41,6 +41,19 @@ public final class Page {
         return p;
     }
 
+    /** Turns the page a quarter turn clockwise, keeping anonymised areas and the split grid on the same content. */
+    public void turn() {
+        rot = (rot + 1) & 3;
+        // (x,y) -> (1-y, x)
+        for (float[] r : redact) {
+            float l = r[0], t = r[1], rr = r[2], b = r[3];
+            r[0] = 1 - b; r[1] = l; r[2] = 1 - t; r[3] = rr;
+        }
+        int gr = gridR;
+        gridR = gridC;
+        gridC = gr;
+    }
+
     /** Key for caches of rendered output; changes whenever an edit changes the result. */
     public String renderKey() { return id + ":" + version; }
 

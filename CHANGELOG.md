@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown i
 ## [Unreleased]
 <!-- Add changes here as you make them; move them under a new version when you release. -->
 
+## [1.10.0] (12) - 2026-10-12
+### Added
+- **Retake.** *Retake* at the bottom of the editor (or in Preview) takes a new photo of just that page and puts it in the same place, so page numbers never change. The page keeps its filter, adjustments, rotation, split and anonymised areas; the edges are found again for the new photo.
+- **Preview.** *Next* at the bottom of the editor opens a full-screen Preview of the finished pages. Swipe left and right like a gallery, pinch to zoom, tap a thumbnail to jump. Tools below: Crop, Filters, Anonymise (open the editor on that page), Rotate, Retake, Delete; *Reorder* at the top moves pages by dragging. Then **Export**. The flow is now Scan > Edit > Preview > Export.
+- Smoother page changes. The editor keeps recent photos in memory and prepares the next and previous page in the background, so swiping between pages no longer flashes blank; Preview does the same for finished pages, rotates instantly, and animates deleting a page.
+- **Export and import scans.** Settings > Backup (or the backup button in Saved scans) saves every saved scan, with its original photos and all edits, to one .zip file, and restores it on another phone or the other version of the app (GitHub or Google Play). Importing the same file twice does not create duplicates.
+
+## [1.9.1] (11) - 2026-09-28
+### Changed
+- New app icons for RadioFilm Scanner and DocScanner, fitted to every launcher shape, with a monochrome version for themed icons on Android 13 and newer. Source artwork is in `docs/icons/`.
+- Prepared for Google Play. When installed from Google Play, **Check for updates** opens the app's Play Store page instead of GitHub (the two copies are signed differently and cannot update each other), and the donation link is not shown. Copies installed from GitHub behave exactly as before.
+
 ## [1.9.0] (10) - 2026-09-28
 ### Removed
 - Monitor Mode (added in 1.8.0). It did not reliably reduce moiré in real photos of screens, so it has been taken out rather than left in as an unreliable option. Scans that had it turned on open normally without it; all other edits are kept.

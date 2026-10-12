@@ -169,6 +169,69 @@ public final class SavedStore {
     /** Cache key that changes whenever the cover is rewritten. */
     public static String thumbKey(Entry e) { return "saved:" + e.id + ":" + e.thumb().lastModified(); }
 
+    // ------------------------------------------------------------------ backup / restore
+
+    /** The folder all saved scans live in (used by backups to stage imported scans). */
+    File root() { return root; }
+
+    /** True if this exact scan (same id, saved at the same time) is already here. */
+    public synchronized boolean has(String id, long time) {
+        for (Entry e : entries) if (e.id.equals(id) && e.time == time) return true;
+        return false;
+    }
+
+    /**
+     * Adopts a scan restored from a backup. {@code staged} holds its photos and a pages.json whose
+     * file names are bare; they are made to point at the scan's new folder. Keeps the original id
+     * when it is free, so importing the same backup twice can be detected.
+     */
+    public Entry adopt(String id, String name, String format, String where, long time, int files, File staged) throws IOException {
+        Entry e = new Entry();
+        synchronized (this) {
+            e.id = id != null && id.matches("[A-Za-z0-9-]{1,40}") && find(id) == null && !new File(root, id).exists()
+                    ? id : UUID.randomUUID().toString().substring(0, 12);
+        }
+        e.name = name == null || name.trim().isEmpty() ? "Scan" : name.trim();
+        e.format = format == null ? "JPEG" : format;
+        e.where = where == null ? "" : where;
+        e.time = time > 0 ? time : System.currentTimeMillis();
+        e.files = files;
+        e.dir = new File(root, e.id);
+        if (!staged.renameTo(e.dir)) throw new IOException("Could not move the restored scan into place");
+        JSONArray out = new JSONArray();
+        try {
+            String text = read(new File(e.dir, "pages.json")).trim();
+            JSONArray a = text.startsWith("[") ? new JSONArray(text) : new JSONObject(text).getJSONArray("pages");
+            for (int i = 0; i < a.length(); i++) {
+                Page p = Page.fromJson(a.getJSONObject(i));
+                File f = new File(e.dir, new File(p.file).getName());
+                if (!f.isFile()) continue;
+                p.file = f.getPath();
+                out.put(p.toJson());
+            }
+            writeAtomic(new File(e.dir, "pages.json"), out.toString());
+        } catch (Exception ex) {
+            deleteDir(e.dir);
+            throw new IOException("A scan in the backup is damaged: " + ex.getMessage());
+        }
+        if (out.length() == 0) { deleteDir(e.dir); throw new IOException("A scan in the backup has no readable pages"); }
+        e.pages = out.length();
+        if (!e.thumb().isFile()) writeThumb(e, pages(e));
+        synchronized (this) {
+            int at = 0;
+            while (at < entries.size() && entries.get(at).time > e.time) at++;   // newest first
+            entries.add(at, e);
+            saveIndex();
+        }
+        return e;
+    }
+
+    static void deleteDir(File d) {
+        File[] fs = d.listFiles();
+        if (fs != null) for (File f : fs) { if (f.isDirectory()) deleteDir(f); else f.delete(); }
+        d.delete();
+    }
+
     // ------------------------------------------------------------------ persistence
 
     private void saveIndex() {

@@ -29,6 +29,16 @@ import java.util.List;
 
 /** Previously saved scans. */
 public final class SavedActivity extends BaseActivity {
+    private static final int REQ_SCANS_OUT = 51, REQ_SCANS_IN = 52;
+
+    @Override
+    protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        if (res != RESULT_OK || data == null || data.getData() == null) return;
+        if (req == REQ_SCANS_OUT) ScanArchive.runExport(this, data.getData());
+        else if (req == REQ_SCANS_IN) ScanArchive.runImport(this, data.getData());
+    }
+
     private App app;
     private SavedStore store;
     private List<SavedStore.Entry> items = new ArrayList<SavedStore.Entry>();
@@ -50,6 +60,23 @@ public final class SavedActivity extends BaseActivity {
         top.addView(back);
         titleTv = Ui.title(this, "Saved scans");
         top.addView(titleTv, Ui.weight(1));
+        ImageView backupBtn = Ui.iconButton(this, R.drawable.ic_backup, "Export or import scans");
+        top.addView(backupBtn);
+        backupBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new android.app.AlertDialog.Builder(SavedActivity.this)
+                        .setTitle("Export or import scans")
+                        .setItems(new String[]{"Export all scans to a file", "Import scans from a file"}, new android.content.DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(android.content.DialogInterface d, int w) {
+                                if (w == 0) ScanArchive.askExport(SavedActivity.this, REQ_SCANS_OUT);
+                                else ScanArchive.askImport(SavedActivity.this, REQ_SCANS_IN);
+                            }
+                        })
+                        .show();
+            }
+        });
         col.addView(top, new LinearLayout.LayoutParams(-1, -2));
         col.addView(buildTools(), new LinearLayout.LayoutParams(-1, -2));
 

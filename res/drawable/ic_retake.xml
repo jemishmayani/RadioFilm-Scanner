@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Camera with a circular arrow: retake this page's photo -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M4,5H7.2L9,3H15L16.8,5H20A2,2 0 0,1 22,7V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V7A2,2 0 0,1 4,5Z M4,7V19H20V7Z"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round"
+        android:pathData="M16,13A4,4 0 1,1 12,9"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M11.2,6.6L14.4,9L11.2,11.4Z"/>
+</vector>

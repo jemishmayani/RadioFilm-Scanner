@@ -20,7 +20,7 @@ import android.widget.TextView;
 /** App settings: how scans are saved and named, camera behaviour, and device info. */
 public final class SettingsActivity extends BaseActivity {
     private static final String EXTRA_CAMERA = "camera";
-    private static final int REQ_EXPORT = 21, REQ_IMPORT = 22;
+    private static final int REQ_EXPORT = 21, REQ_IMPORT = 22, REQ_SCANS_OUT = 23, REQ_SCANS_IN = 24;
     private TextView suggestValue;
 
     private Prefs prefs;
@@ -154,6 +154,15 @@ public final class SettingsActivity extends BaseActivity {
             }
         });
 
+        LinearLayout sOut = row(R.drawable.ic_upload, "Export scans", "All saved scans with their photos and edits, in one file. " + ScanArchive.summary());
+        sOut.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { ScanArchive.askExport(SettingsActivity.this, REQ_SCANS_OUT); }
+        });
+        LinearLayout sIn = row(R.drawable.ic_backup, "Import scans", "Restore scans from an exported file, e.g. after switching between the GitHub and Play Store versions");
+        sIn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { ScanArchive.askImport(SettingsActivity.this, REQ_SCANS_IN); }
+        });
+
         // ---------------------------------------------------------------- about
         section("About");
         LinearLayout about = row(R.drawable.ic_info, "About " + Branding.name(), "Story, privacy, source code, support");
@@ -233,6 +242,8 @@ public final class SettingsActivity extends BaseActivity {
         super.onActivityResult(req, res, data);
         if (res != RESULT_OK || data == null || data.getData() == null) return;
         final android.net.Uri uri = data.getData();
+        if (req == REQ_SCANS_OUT) { ScanArchive.runExport(this, uri); return; }
+        if (req == REQ_SCANS_IN) { ScanArchive.runImport(this, uri); return; }
         if (req == REQ_EXPORT) {
             try {
                 SettingsBackup.write(this, uri);

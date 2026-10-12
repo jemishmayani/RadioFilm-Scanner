@@ -24,6 +24,7 @@ public final class ReorderGrid extends ViewGroup {
 
     private final List<View> order = new ArrayList<View>();
     private int cols = 2, gap, pad, tileW, tileH;
+    private boolean large;
     private Listener listener;
 
     private View drag, downChild;
@@ -42,6 +43,11 @@ public final class ReorderGrid extends ViewGroup {
 
     public void setListener(Listener l) { listener = l; }
 
+    /** Large: one page per row on phones (two on tablets), for a close look before export. */
+    public void setLarge(boolean on) { large = on; requestLayout(); }
+
+    public boolean isLarge() { return large; }
+
     public void setTiles(List<View> tiles) {
         removeAllViews();
         order.clear();
@@ -54,7 +60,8 @@ public final class ReorderGrid extends ViewGroup {
     @Override
     protected void onMeasure(int ws, int hs) {
         int w = MeasureSpec.getSize(ws);
-        cols = w > Ui.dp(getContext(), 600) ? 3 : 2;
+        boolean wide = w > Ui.dp(getContext(), 600);
+        cols = large ? (wide ? 2 : 1) : (wide ? 3 : 2);
         tileW = Math.max(1, (w - 2 * pad - gap * (cols - 1)) / cols);
         tileH = (int) (tileW * 1.3f);
         int n = order.size();

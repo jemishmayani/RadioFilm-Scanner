@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="bg">#FF0D1B2A</color>
+    <color name="icon_bg">#FF405C71</color>
     <color name="panel">#FF152A3E</color>
     <color name="accent">#FFF5B544</color>
     <color name="light">#FFE6F0F7</color>

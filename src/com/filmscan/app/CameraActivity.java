@@ -79,6 +79,9 @@ public final class CameraActivity extends BaseActivity {
     private static final int REQ_CAMERA = 1, REQ_IMPORT = 2;
     public static final String EXTRA_SAVED = "savedName", EXTRA_ADD = "addToGroup", EXTRA_WHERE = "savedWhere";
     private boolean addMode;          // opened from the editor to add pages; returns there
+    private String retakeId;          // set: one photo replaces this page (same place), then returns
+    private int retakePage;           // its page number, for the hint
+    public static final String EXTRA_RETAKE = "retakeId";
     private String firstNewId;        // first page shot since the editor was last opened
     private boolean lowStorageWarned;
     private LinearLayout addBar;
@@ -142,6 +145,26 @@ public final class CameraActivity extends BaseActivity {
         return new Intent(c, CameraActivity.class).putExtra(EXTRA_ADD, true);
     }
 
+    /** Camera for one new photo of a page; the editor puts it in that page's place. */
+    public static Intent intentRetake(Context c, String pageId) {
+        return intentAdd(c).putExtra(EXTRA_RETAKE, pageId);
+    }
+
+    /** Retake: the new photo goes into the target page itself. Returns the page now holding it. */
+    private Page placeRetake(Page fresh) {
+        Page old = session.find(retakeId);
+        if (old == null) {   // the page is gone: keep the photo as a new page instead of losing it
+            if (session.find(fresh.id) == null) session.add(fresh);
+            return fresh;
+        }
+        session.replacePhoto(old, fresh);
+        if (app.isEditingSaved()) {
+            SavedStore.Entry e = app.editingEntry();
+            if (e != null) app.saved().refresh(e);
+        }
+        return old;
+    }
+
     // ================================================================== lifecycle
 
     @Override
@@ -150,6 +173,11 @@ public final class CameraActivity extends BaseActivity {
         app = App.get();
         prefs = app.prefs();
         addMode = getIntent().getBooleanExtra(EXTRA_ADD, false);
+        retakeId = addMode ? getIntent().getStringExtra(EXTRA_RETAKE) : null;
+        session = app.session();
+        Page target = session.find(retakeId);
+        if (retakeId != null && target == null) retakeId = null;
+        retakePage = target == null ? 0 : session.indexOf(target) + 1;
         if (b != null) firstNewId = b.getString("firstNewId");
         if (addMode) setBackHandler(new Runnable() { @Override public void run() { finishAdd(firstNewId); } });
         session = app.session();
@@ -468,7 +496,12 @@ public final class CameraActivity extends BaseActivity {
         FrameLayout.LayoutParams abl = Ui.frame(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         abl.bottomMargin = Ui.dp(this, 14);
         preview.addView(addBar, abl);
-        addBar.setVisibility(addMode ? View.VISIBLE : View.GONE);
+        addBar.setVisibility(addMode && retakePage == 0 ? View.VISIBLE : View.GONE);
+        if (retakePage > 0) {
+            app.main.postDelayed(new Runnable() {
+                @Override public void run() { showHint("Retake page " + retakePage, 2500); }
+            }, 400);
+        }
         addDone.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { finishAdd(firstNewId); } });
         permPanel = buildPermissionPanel();
         preview.addView(permPanel, Ui.frame(-1, -2, Gravity.CENTER));
@@ -721,6 +754,11 @@ public final class CameraActivity extends BaseActivity {
     }
 
     private void applyModeUi() {
+        if (modeSingle == null || modeBatch == null) return;
+        // a retake is one shot straight back to the editor: the single/batch choice does not apply
+        int vis = retakeId != null ? View.GONE : View.VISIBLE;
+        modeSingle.setVisibility(vis);
+        modeBatch.setVisibility(vis);
         boolean batch = prefs.batch();
         styleChip(modeSingle, !batch);
         styleChip(modeBatch, batch);
@@ -1467,6 +1505,19 @@ public final class CameraActivity extends BaseActivity {
         p.file = f.getPath();
         p.filter = com.filmscan.core.Filters.ORIGINAL;
         if (!Imaging.probe(p)) { f.delete(); showHint("The photo could not be read. Try again.", 2500); return; }
+        if (retakeId != null) {
+            showHint("Finding the edges…", 4000);
+            app.run(new Runnable() {
+                @Override
+                public void run() {
+                    Imaging.autoCrop(p);   // so the retaken page arrives cropped, like a batch page
+                    app.ui(new Runnable() {
+                        @Override public void run() { Page placed = placeRetake(p); finishAdd(placed.id); }
+                    });
+                }
+            });
+            return;
+        }
         session.add(p);
         if (firstNewId == null) firstNewId = p.id;
         long free = Storage.freeBytes();
@@ -1597,7 +1648,7 @@ public final class CameraActivity extends BaseActivity {
         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
         i.setType("image/*");
         i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, retakePage == 0);
         try {
             startActivityForResult(Intent.createChooser(i, "Choose film photos"), REQ_IMPORT);
         } catch (ActivityNotFoundException e) {
@@ -1642,6 +1693,7 @@ public final class CameraActivity extends BaseActivity {
                 int failed = 0;
                 int index = 0;
                 for (Uri u : uris) {
+                    if (retakePage > 0 && !added.isEmpty()) break;   // a retake uses one photo
                     final int num = ++index;
                     if (uris.size() > 1) app.ui(new Runnable() {
                         @Override public void run() { setProgress(dlg, "Importing photo " + num + " of " + uris.size() + "…", num - 1, uris.size()); }
@@ -1676,6 +1728,11 @@ public final class CameraActivity extends BaseActivity {
                     @Override
                     public void run() {
                         try { dlg.dismiss(); } catch (Exception ignored) { }
+                        if (retakeId != null && !added.isEmpty()) {
+                            Page placed = placeRetake(added.get(0));
+                            finishAdd(placed.id);
+                            return;
+                        }
                         for (Page p : added) session.pages.add(p);
                         session.save();
                         refreshPagesButton();

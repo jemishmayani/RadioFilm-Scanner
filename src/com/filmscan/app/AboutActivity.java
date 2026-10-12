@@ -23,7 +23,32 @@ public final class AboutActivity extends BaseActivity {
      * The app has no internet permission (that is how scans stay private), so updates are checked in
      * the browser: the latest GitHub release opens, and the user compares its version with theirs.
      */
+    /**
+     * True when this copy was installed by Google Play. Play copies are signed with Google's key, so
+     * they update through Play (not GitHub), and payment links outside Play are not shown.
+     */
+    static boolean fromPlay(android.content.Context c) {
+        try {
+            return "com.android.vending".equals(c.getPackageManager().getInstallerPackageName(c.getPackageName()));
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     static void checkForUpdates(final android.app.Activity a) {
+        if (fromPlay(a)) {
+            try {
+                a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + a.getPackageName())));
+            } catch (ActivityNotFoundException e) {
+                try {
+                    a.startActivity(new Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://play.google.com/store/apps/details?id=" + a.getPackageName())));
+                } catch (ActivityNotFoundException e2) {
+                    Toast.makeText(a, "Open Google Play to check for updates.", Toast.LENGTH_LONG).show();
+                }
+            }
+            return;
+        }
         String ver = "";
         try { ver = a.getPackageManager().getPackageInfo(a.getPackageName(), 0).versionName; } catch (Exception ignored) { }
         new android.app.AlertDialog.Builder(a)
@@ -104,6 +129,7 @@ public final class AboutActivity extends BaseActivity {
         bullet(R.drawable.ic_shield, "No account, no cloud, no ads, no tracking.");
         bullet(R.drawable.ic_shield, "No internet permission: the app cannot send anything anywhere. Links below open in your browser.");
         bullet(R.drawable.ic_shield, "Your scans stay on this phone until you save or share them.");
+        link(R.drawable.ic_shield, "Privacy policy", "Opens in your browser", REPO + "/blob/main/PRIVACY.md");
 
         section("Project");
         link(R.drawable.ic_github, "Source code on GitHub", "Read the code, download releases", REPO);
@@ -126,7 +152,7 @@ public final class AboutActivity extends BaseActivity {
                 try { startActivity(Intent.createChooser(i, "Share the app")); } catch (Exception ignored) { }
             }
         });
-        if (DONATE_URL != null) link(R.drawable.ic_heart, "Buy me a coffee", "Support development: buymeacoffee.com/jemishmayani", DONATE_URL);
+        if (DONATE_URL != null && !fromPlay(this)) link(R.drawable.ic_heart, "Buy me a coffee", "Support development: buymeacoffee.com/jemishmayani", DONATE_URL);
 
         section("Good to know");
         paragraph(Branding.name() + " is a scanning and sharing tool, not a medical device. Make diagnostic decisions "
