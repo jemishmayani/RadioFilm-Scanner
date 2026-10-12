@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown i
 ## [Unreleased]
 <!-- Add changes here as you make them; move them under a new version when you release. -->
 
+## [1.10.1] (13) - 2026-10-12
+### Changed
+- Requires Android 7.0 or newer (was 5.0), as Google Play's automatic protection needs. Phones on Android 5.0 to 6.0 can keep using version 1.10.0 from GitHub.
+
 ## [1.10.0] (12) - 2026-10-12
 ### Added
 - **Retake.** *Retake* at the bottom of the editor (or in Preview) takes a new photo of just that page and puts it in the same place, so page numbers never change. The page keeps its filter, adjustments, rotation, split and anonymised areas; the edges are found again for the new photo.

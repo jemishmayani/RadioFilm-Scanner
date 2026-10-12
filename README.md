@@ -4,7 +4,7 @@
 
 Photograph a film on a lightbox (or a report, a prescription, a whiteboard), and the app finds the edges, straightens the perspective, enhances it, and saves a clean full-resolution JPEG, PNG or PDF. No account, no cloud, no ads. The app does not even request internet access.
 
-![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.10.0-orange)
+![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.10.1-orange)
 
 <p align="center">
   <img src="docs/camera.jpg" width="24%" alt="Camera with live edge detection">
@@ -95,7 +95,7 @@ The app also keeps its own copy of each saved scan (in **Saved scans**) so you c
 
 **Updating:** install the new APK over the old one; your saved scans and settings are kept. In the app, **Settings > Check for updates** shows your version and opens the latest release here, because the app has no internet access of its own.
 
-Works on Android 5.0 and newer, on any processor (the APK contains no native code). After updating to 1.7.0, if the home-screen icon disappears, add it again from the app drawer.
+Works on Android 7.0 and newer, on any processor (the APK contains no native code). After updating to 1.7.0, if the home-screen icon disappears, add it again from the app drawer.
 
 ## Support the project
 

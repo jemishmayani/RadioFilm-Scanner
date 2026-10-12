@@ -18,8 +18,8 @@ aapt2 compile --dir res -o "$A/res.zip"
 aapt2 link --proto-format -o "$A/base.apk" -I "$ANDROID_JAR" --manifest AndroidManifest.xml --java "$A/gen" "$A/res.zip" --auto-add-overlay
 find "$A/src" "$A/gen" -name '*.java' > "$A/srcs.txt"
 javac -nowarn -source 8 -target 8 -bootclasspath "$ANDROID_JAR" -d "$A/obj" @"$A/srcs.txt"
-if command -v d8 >/dev/null; then d8 --min-api 21 --lib "$ANDROID_JAR" --output "$A/mod/dex" $(find "$A/obj" -name '*.class')
-else dalvik-exchange --dex --min-sdk-version=21 --output="$A/mod/dex/classes.dex" "$A/obj"; fi
+if command -v d8 >/dev/null; then d8 --min-api 24 --lib "$ANDROID_JAR" --output "$A/mod/dex" $(find "$A/obj" -name '*.class')
+else dalvik-exchange --dex --min-sdk-version=24 --output="$A/mod/dex/classes.dex" "$A/obj"; fi
 (cd "$A/x" && unzip -q ../base.apk && mv AndroidManifest.xml ../mod/manifest/ && mv resources.pb res ../mod/)
 (cd "$A/mod" && zip -qr ../base.zip manifest dex res resources.pb)
 VER=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' AndroidManifest.xml | head -1)

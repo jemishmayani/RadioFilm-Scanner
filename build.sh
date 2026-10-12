@@ -40,7 +40,7 @@ if [ -n "$D8" ]; then
   (cd "$OUT/obj" && jar cf ../classes.jar .)
   "$D8" --release --min-api 21 --lib "$ANDROID_JAR" --output "$OUT/dex" "$OUT/classes.jar"
 else
-  "$DX" --dex --min-sdk-version=21 --output="$OUT/dex/classes.dex" "$OUT/obj"
+  "$DX" --dex --min-sdk-version=24 --output="$OUT/dex/classes.dex" "$OUT/obj"
 fi
 
 "$AAPT" package -f -M AndroidManifest.xml -S res -I "$ANDROID_JAR" -F "$OUT/unaligned.apk" -0 arsc

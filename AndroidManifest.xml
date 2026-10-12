@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.filmscan.app"
-    android:versionCode="12"
-    android:versionName="1.10.0">
+    android:versionCode="13"
+    android:versionName="1.10.1">
 
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
