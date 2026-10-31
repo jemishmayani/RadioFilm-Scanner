@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com). `versionCode` is shown i
 ## [Unreleased]
 <!-- Add changes here as you make them; move them under a new version when you release. -->
 
+## [1.10.2] (14) - 2026-10-31
+### Fixed
+- **Shutter delay.** The photo is now taken the moment you press the shutter:
+  - the camera no longer restarts its focus search when the picture is already sharp (it used to wait up to 1.6 seconds), and waits at most 0.7 seconds when it does need to focus;
+  - the shutter fires as your finger touches it, not when it lifts;
+  - photos are written to storage on a separate thread, so a large photo being saved no longer holds up the next shot, and leaving the camera while a photo is saving no longer freezes the screen;
+  - in Batch mode the shutter is ready for the next film as soon as the photo is captured, instead of after it is saved;
+  - the shutter sound plays when the photo is taken, not after it is saved.
+- The first photo after returning to the camera could rely on out-of-date focus information.
+
 ## [1.10.1] (13) - 2026-10-12
 ### Changed
 - Requires Android 7.0 or newer (was 5.0), as Google Play's automatic protection needs. Phones on Android 5.0 to 6.0 can keep using version 1.10.0 from GitHub.

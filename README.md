@@ -4,7 +4,7 @@
 
 Photograph a film on a lightbox (or a report, a prescription, a whiteboard), and the app finds the edges, straightens the perspective, enhances it, and saves a clean full-resolution JPEG, PNG or PDF. No account, no cloud, no ads. The app does not even request internet access.
 
-![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.10.1-orange)
+![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016-3DDC84) ![APK size](https://img.shields.io/badge/APK-~380%20KB-blue) ![No internet permission](https://img.shields.io/badge/internet%20permission-none-success) ![Version](https://img.shields.io/badge/version-1.10.2-orange)
 
 <p align="center">
   <img src="docs/camera.jpg" width="24%" alt="Camera with live edge detection">

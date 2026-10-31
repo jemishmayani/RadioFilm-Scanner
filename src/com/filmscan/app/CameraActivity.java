@@ -79,6 +79,7 @@ public final class CameraActivity extends BaseActivity {
     private static final int REQ_CAMERA = 1, REQ_IMPORT = 2;
     public static final String EXTRA_SAVED = "savedName", EXTRA_ADD = "addToGroup", EXTRA_WHERE = "savedWhere";
     private boolean addMode;          // opened from the editor to add pages; returns there
+    private boolean shotOnDown;      // the shutter fired on touch-down; skip the click that follows
     private String retakeId;          // set: one photo replaces this page (same place), then returns
     private int retakePage;           // its page number, for the hint
     public static final String EXTRA_RETAKE = "retakeId";
@@ -600,14 +601,25 @@ public final class CameraActivity extends BaseActivity {
         shutter.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent e) {
-                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) shutterInner.animate().scaleX(0.86f).scaleY(0.86f).setDuration(90).start();
-                else if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL)
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    shutterInner.animate().scaleX(0.86f).scaleY(0.86f).setDuration(90).start();
+                    shotOnDown = true;
+                    takePicture();   // no waiting for the finger to lift
+                }
+                else if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) {
                     shutterInner.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                    if (e.getActionMasked() == MotionEvent.ACTION_CANCEL) shotOnDown = false;   // no click will follow
+                }
                 return false;
             }
         });
         shutter.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { takePicture(); }
+            @Override
+            public void onClick(View v) {
+                // a tap already fired on touch-down; a click alone comes from accessibility services or a keyboard
+                if (shotOnDown) { shotOnDown = false; return; }
+                takePicture();
+            }
         });
         galleryBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { pickImages(); }
@@ -1106,6 +1118,7 @@ public final class CameraActivity extends BaseActivity {
         capturing = false;
         manualFocus = false;
         focusRegions = null;
+        lastAfState = null;   // a reopened camera must report focus afresh
         state = ST_PREVIEW;
     }
 
@@ -1321,6 +1334,13 @@ public final class CameraActivity extends BaseActivity {
         CameraCaptureSession s = capSession;
         if (s == null) { captureFailed(); return; }
         if (fixedFocus || (!afAuto && !afContinuous)) { precaptureOrCapture(); return; }
+        Integer af = lastAfState;
+        if (af != null && (af == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED
+                || af == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED)) {
+            // already sharp: shoot now instead of making the lens search again
+            precaptureOrCapture();
+            return;
+        }
         try {
             previewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
             state = ST_WAIT_LOCK;
@@ -1349,14 +1369,22 @@ public final class CameraActivity extends BaseActivity {
         }
     }
 
+    /** Latest autofocus state reported by the preview (camera thread). */
+    private volatile Integer lastAfState;
+
+    /** One thread that writes photos to storage in order, so the camera thread is never blocked by the disk. */
+    private static final java.util.concurrent.ExecutorService photoWriter = java.util.concurrent.Executors.newSingleThreadExecutor();
+
     private final CameraCaptureSession.CaptureCallback captureCallback = new CameraCaptureSession.CaptureCallback() {
         private void process(CaptureResult r) {
+            Integer afNow = r.get(CaptureResult.CONTROL_AF_STATE);
+            if (afNow != null) lastAfState = afNow;
             long waited = SystemClock.uptimeMillis() - waitStart;
             switch (state) {
                 case ST_WAIT_LOCK: {
                     Integer af = r.get(CaptureResult.CONTROL_AF_STATE);
                     if (af == null || af == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
-                            || af == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED || waited > 1600) {
+                            || af == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED || waited > 700) {
                         state = ST_TAKEN;
                         precaptureOrCapture();
                     }
@@ -1366,7 +1394,7 @@ public final class CameraActivity extends BaseActivity {
                     Integer ae = r.get(CaptureResult.CONTROL_AE_STATE);
                     if (ae == null || ae == CaptureResult.CONTROL_AE_STATE_PRECAPTURE
                             || ae == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
-                            || ae == CaptureResult.CONTROL_AE_STATE_CONVERGED || waited > 1000) {
+                            || ae == CaptureResult.CONTROL_AE_STATE_CONVERGED || waited > 800) {
                         state = ST_WAIT_NON_PRE;
                         waitStart = SystemClock.uptimeMillis();
                     }
@@ -1374,7 +1402,7 @@ public final class CameraActivity extends BaseActivity {
                 }
                 case ST_WAIT_NON_PRE: {
                     Integer ae = r.get(CaptureResult.CONTROL_AE_STATE);
-                    if (ae == null || ae != CaptureResult.CONTROL_AE_STATE_PRECAPTURE || waited > 1500) {
+                    if (ae == null || ae != CaptureResult.CONTROL_AE_STATE_PRECAPTURE || waited > 1000) {
                         state = ST_TAKEN;
                         captureStill();
                     }
@@ -1412,8 +1440,12 @@ public final class CameraActivity extends BaseActivity {
             if (edgeHq) b.set(CaptureRequest.EDGE_MODE, CameraMetadata.EDGE_MODE_HIGH_QUALITY);
             s.capture(b.build(), new CameraCaptureSession.CaptureCallback() {
                 @Override
-                public void onCaptureCompleted(CameraCaptureSession ss, CaptureRequest rq, TotalCaptureResult r) {
+                public void onCaptureStarted(CameraCaptureSession ss, CaptureRequest rq, long timestamp, long frame) {
                     if (sound != null && prefs.sound()) try { sound.play(MediaActionSound.SHUTTER_CLICK); } catch (Throwable ignored) { }
+                }
+
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession ss, CaptureRequest rq, TotalCaptureResult r) {
                     unlockFocus();
                 }
 
@@ -1459,16 +1491,37 @@ public final class CameraActivity extends BaseActivity {
                 img = r.acquireNextImage();
                 if (img == null) return;
                 ByteBuffer buf = img.getPlanes()[0].getBuffer();
-                byte[] data = new byte[buf.remaining()];
+                final byte[] data = new byte[buf.remaining()];
                 buf.get(data);
                 img.close();
                 img = null;
                 final File f = session.newImageFile(".jpg");
-                FileOutputStream fo = new FileOutputStream(f);
-                fo.write(data);
-                fo.getFD().sync();
-                fo.close();
-                app.ui(new Runnable() { @Override public void run() { onPhotoSaved(f); } });
+                app.ui(new Runnable() { @Override public void run() { onPhotoTaken(); } });
+                photoWriter.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            FileOutputStream fo = new FileOutputStream(f);
+                            try {
+                                fo.write(data);
+                                fo.getFD().sync();
+                            } finally {
+                                fo.close();
+                            }
+                            app.ui(new Runnable() { @Override public void run() { onPhotoSaved(f); } });
+                        } catch (Exception e) {
+                            Log.e(TAG, "save photo", e);
+                            f.delete();
+                            app.ui(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (!releasesEarly()) { app.main.removeCallbacks(captureWatchdog); capturing = false; }
+                                    showHint("The photo could not be saved. Check free storage and try again.", 3000);
+                                }
+                            });
+                        }
+                    }
+                });
             } catch (Exception e) {
                 Log.e(TAG, "save photo", e);
                 captureFailed();
@@ -1497,9 +1550,22 @@ public final class CameraActivity extends BaseActivity {
         }
     };
 
-    private void onPhotoSaved(File f) {
+    /** The camera has delivered the photo (it is still being written to storage). */
+    private void onPhotoTaken() {
         app.main.removeCallbacks(captureWatchdog);
-        capturing = false;
+        // batch: ready for the next film immediately; single shot and retake leave this screen when saved
+        if (releasesEarly()) capturing = false;
+    }
+
+    /** Batch shots release the shutter as soon as the photo is in memory (see onPhotoTaken). */
+    private boolean releasesEarly() { return prefs.batch() && retakeId == null; }
+
+    private void onPhotoSaved(File f) {
+        if (!releasesEarly()) {
+            // in batch mode a later shot may already be in progress: leave its state and watchdog alone
+            app.main.removeCallbacks(captureWatchdog);
+            capturing = false;
+        }
         final Page p = new Page();
         p.id = Session.newId();
         p.file = f.getPath();
